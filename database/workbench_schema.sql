@@ -36,3 +36,38 @@ CREATE TABLE IF NOT EXISTS screen_results_v1 (
 
 CREATE INDEX IF NOT EXISTS idx_screen_results_v1_state
     ON screen_results_v1(screen_run_id, research_state, research_priority);
+
+CREATE TABLE IF NOT EXISTS strategy_versions_v1 (
+    strategy_id TEXT NOT NULL,
+    strategy_version TEXT NOT NULL,
+    strategy_sha256 TEXT NOT NULL,
+    name TEXT NOT NULL,
+    lane TEXT NOT NULL CHECK (lane IN ('stable', 'etf', 'cyclical')),
+    loaded_at TEXT NOT NULL,
+    PRIMARY KEY (strategy_id, strategy_version)
+);
+
+CREATE TABLE IF NOT EXISTS strategy_runs_v1 (
+    strategy_run_id TEXT PRIMARY KEY,
+    release_id TEXT NOT NULL,
+    facts_sha256 TEXT NOT NULL,
+    strategy_id TEXT NOT NULL,
+    strategy_version TEXT NOT NULL,
+    screen_run_id TEXT NOT NULL REFERENCES screen_runs_v1(screen_run_id),
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('completed', 'failed'))
+);
+
+CREATE TABLE IF NOT EXISTS watch_items_v1 (
+    watch_item_id TEXT PRIMARY KEY,
+    instrument_id TEXT NOT NULL,
+    release_id TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    review_condition TEXT,
+    review_due_date TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_runs_v1_release
+    ON strategy_runs_v1(release_id, strategy_id, created_at DESC);

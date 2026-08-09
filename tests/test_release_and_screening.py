@@ -79,6 +79,26 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             self.assertEqual(state, "资料足以研究")
             self.assertEqual(json.loads(reasons), ["PASS"])
 
+    def test_strategy_run_and_desktop_core_bind_the_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, runtime, workbench = root / "source.sqlite", root / "runtime", root / "workbench.sqlite"
+            create_source_database(source)
+            self.publish(source, runtime, "release-strategy")
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "strategy_engine.py"), "--run", "stable_dividend_stock_research", "--runtime-root", str(runtime), "--workbench", str(workbench)],
+                cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
+            )
+            strategy_run = json.loads(completed.stdout)
+            self.assertEqual(strategy_run["release_id"], "release-strategy")
+            core = subprocess.run(
+                [sys.executable, str(SCRIPTS / "desktop_core.py"), "--command", "dashboard", "--runtime-root", str(runtime), "--workbench", str(workbench)],
+                cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
+            )
+            dashboard = json.loads(core.stdout)
+            self.assertTrue(dashboard["ok"])
+            self.assertEqual(dashboard["result"]["release"]["release_id"], "release-strategy")
+
 
 if __name__ == "__main__":
     unittest.main()

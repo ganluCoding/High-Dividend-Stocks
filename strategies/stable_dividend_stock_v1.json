@@ -1,0 +1,11 @@
+{
+  "strategy_id": "stable_dividend_stock_research",
+  "strategy_version": "1.0.0",
+  "name": "稳健分红股票研究",
+  "lane": "stable",
+  "rule_file": "stable_dividend_stock_v1.json",
+  "purpose": "研究常规现金分红历史与行业适用的财务资料，不构成买卖建议。",
+  "suitable_for": "愿意逐只研究企业、接受日终参考价与人工复核的长期投资者。",
+  "excludes": "周期红利、ETF、资料不足或特别分红驱动的标的。",
+  "review_triggers": ["下一次年报", "下一次分红公告", "价格重新确认"]
+}

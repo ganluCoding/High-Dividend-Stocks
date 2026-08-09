@@ -122,6 +122,29 @@ def run_etf_rule(connection: sqlite3.Connection, rule: dict[str, Any]) -> list[d
     return results
 
 
+def run_cyclical_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    params = rule["required_parameters"]
+    results: list[dict[str, Any]] = []
+    instruments = connection.execute("SELECT instrument_id, ticker, name FROM security_master WHERE asset_type='stock' ORDER BY instrument_id").fetchall()
+    for instrument_id, ticker, name in instruments:
+        profile = taxonomy.get(instrument_id)
+        if profile is None:
+            state, reasons = "资料不足", ["MISSING_TAXONOMY"]
+        elif profile.get("dividend_style") not in params["included_dividend_styles"]:
+            state, reasons = "不纳入本模板", ["NOT_CYCLICAL"]
+        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"]):
+            state, reasons = "资料不足", ["MISSING_COVERAGE"]
+        else:
+            state, reasons = "继续观察", ["WATCH"]
+        price_row = connection.execute("SELECT trade_date, close FROM v_latest_market_eod_price WHERE instrument_id=?", (instrument_id,)).fetchone()
+        results.append({"instrument_id": instrument_id, "state": state, "reasons": reasons, "priority": None, "payload": {
+            "ticker": ticker, "name": name, "price_date": None if price_row is None else price_row[0],
+            "reference_close_cny": None if price_row is None else price_row[1], "taxonomy": profile,
+            "boundary": "周期性利润和静态收益率不能外推为未来分红；仅供观察与复核。",
+        }})
+    return results
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rule", type=Path, required=True)
@@ -144,6 +167,8 @@ def main() -> int:
             results = run_stock_rule(facts_connection, rule, taxonomy)
         elif rule["rule_id"] == "dividend_etf":
             results = run_etf_rule(facts_connection, rule)
+        elif rule["rule_id"] == "cyclical_dividend_watch":
+            results = run_cyclical_rule(facts_connection, rule, taxonomy)
         else:
             raise SystemExit(f"Unsupported rule id: {rule['rule_id']}")
     rule_hash = sha256_file(args.rule)

@@ -1,0 +1,11 @@
+{
+  "strategy_id": "cyclical_dividend_satellite_watch",
+  "strategy_version": "1.0.0",
+  "name": "周期红利卫星观察",
+  "lane": "cyclical",
+  "rule_file": "cyclical_dividend_watch_v1.json",
+  "purpose": "识别航运、能源、煤炭、钢铁等周期标的，要求长期利润与分红复核。",
+  "suitable_for": "明确接受周期风险、仅把该类标的作为观察对象的研究者。",
+  "excludes": "稳健分红主策略、未来分红预测和按静态收益率排序。",
+  "review_triggers": ["行业景气变化", "下一次年报", "下一次分红公告"]
+}

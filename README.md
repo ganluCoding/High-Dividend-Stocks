@@ -9,6 +9,7 @@
 - 为价格、股票分红、财务、ETF 分配和 ETF 产品资料生成覆盖矩阵；
 - 将规则、筛选结果写入独立 `workbench.db`，并绑定发布版本和规则版本；
 - 提供稳健分红股票与红利 ETF 两个非推荐研究模板；
+- 提供稳健股票、红利 ETF、周期观察三个版本化策略框架，以及 Tauri + React 本地客户端 MVP；
 - 内置离线合成测试，不需要联网或提交真实数据。
 
 当前本地运行时可以包含全市场证券主表与日终价格，但低频事实覆盖会单独显示。项目故意不生成“全市场高股息排行榜”。
@@ -43,6 +44,8 @@ python3 scripts/run_screen.py \
 python3 -m unittest discover -s tests -v
 python3 scripts/validate_golden_fixtures.py
 ```
+
+客户端和策略库说明见 [MVP 文档](docs/STRATEGY-CLIENT-MVP.md)。
 
 ## 结果边界
 

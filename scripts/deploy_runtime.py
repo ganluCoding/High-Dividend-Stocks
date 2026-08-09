@@ -30,6 +30,8 @@ def main() -> int:
         "scripts/release_protocol.py",
         "scripts/publish_release.py",
         "scripts/run_screen.py",
+        "scripts/strategy_engine.py",
+        "scripts/desktop_core.py",
         "scripts/install_release_publisher_agent.py",
         "scripts/collect_spike_data.py",
         "config/autonomous_update.json",
@@ -39,6 +41,7 @@ def main() -> int:
     shutil.copytree(PROJECT_ROOT / "database" / "migrations", runtime / "database" / "migrations", dirs_exist_ok=True)
     copy_file(PROJECT_ROOT / "database" / "workbench_schema.sql", runtime / "database" / "workbench_schema.sql")
     shutil.copytree(PROJECT_ROOT / "rules", runtime / "rules", dirs_exist_ok=True)
+    shutil.copytree(PROJECT_ROOT / "strategies", runtime / "strategies", dirs_exist_ok=True)
     runtime_db = runtime / "data" / "database" / "high_dividend.db"
     if args.refresh_database or not runtime_db.exists():
         copy_file(PROJECT_ROOT / "data" / "database" / "high_dividend.db", runtime_db)
