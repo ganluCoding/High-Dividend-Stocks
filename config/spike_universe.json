@@ -1,0 +1,73 @@
+{
+  "schema_version": "spike-universe-v1",
+  "principal_cny": "200000.00",
+  "research_as_of": "2026-08-07T15:00:00+08:00",
+  "default_start_date": "2019-01-01",
+  "purpose": "Data and methodology fixtures only; not an investment recommendation universe.",
+  "instruments": [
+    {
+      "instrument_id": "CN.XSHE.000333",
+      "code": "000333",
+      "ticker": "000333.SZ",
+      "name": "美的集团",
+      "asset_type": "stock",
+      "provider_symbol": "SZ000333",
+      "start_date": "2019-01-01",
+      "role": "ordinary_business_and_corporate_actions"
+    },
+    {
+      "instrument_id": "CN.XSHG.600507",
+      "code": "600507",
+      "ticker": "600507.SH",
+      "name": "方大特钢",
+      "asset_type": "stock",
+      "provider_symbol": "SH600507",
+      "start_date": "2019-01-01",
+      "role": "cyclical_dividend_cut_observation"
+    },
+    {
+      "instrument_id": "CN.XSHG.600900",
+      "code": "600900",
+      "ticker": "600900.SH",
+      "name": "长江电力",
+      "asset_type": "stock",
+      "provider_symbol": "SH600900",
+      "start_date": "2019-01-01",
+      "role": "regulated_utility_and_capex"
+    },
+    {
+      "instrument_id": "CN.XSHG.601398",
+      "code": "601398",
+      "ticker": "601398.SH",
+      "name": "工商银行",
+      "asset_type": "stock",
+      "provider_symbol": "SH601398",
+      "start_date": "2019-01-01",
+      "role": "bank_capital_model"
+    },
+    {
+      "instrument_id": "CN.XSHG.512890",
+      "code": "512890",
+      "ticker": "512890.SH",
+      "name": "华泰柏瑞中证红利低波动ETF",
+      "asset_type": "etf",
+      "provider_symbol": "sh512890",
+      "start_date": "2019-01-18",
+      "benchmark": "中证红利低波动指数",
+      "benchmark_id": "INDEX.CSI.H30269",
+      "role": "same_index_etf_distribution_policy_a"
+    },
+    {
+      "instrument_id": "CN.XSHG.563020",
+      "code": "563020",
+      "ticker": "563020.SH",
+      "name": "易方达中证红利低波动ETF",
+      "asset_type": "etf",
+      "provider_symbol": "sh563020",
+      "start_date": "2023-12-14",
+      "benchmark": "中证红利低波动指数",
+      "benchmark_id": "INDEX.CSI.H30269",
+      "role": "same_index_etf_distribution_policy_b"
+    }
+  ]
+}

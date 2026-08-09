@@ -1,0 +1,12 @@
+field_group,primary_source,convenience_source,public_access,automated_collection,local_storage,internal_calculation,derived_display,raw_redistribution,pit_capability,initial_status
+stock_daily_ohlcv,Shanghai/Shenzhen exchange disclosures,AKShare stock_zh_a_hist (Eastmoney upstream),allowed,unknown,allowed,allowed,allowed,restricted,date-level,collect_internal_only
+stock_daily_ohlcv_fallback,Shanghai/Shenzhen exchange disclosures,BaoStock history API,allowed,unknown,allowed,allowed,allowed,restricted,date-level,collect_internal_only
+etf_daily_ohlcv,Shanghai Stock Exchange,AKShare fund_etf_hist_em (Eastmoney upstream),allowed,unknown,allowed,allowed,allowed,restricted,date-level,collect_internal_only
+etf_daily_ohlcv_fallback,Shanghai Stock Exchange,AKShare fund_etf_hist_sina (Sina upstream),allowed,unknown,allowed,allowed,allowed,restricted,date-level,collect_internal_only
+stock_dividend_implemented,CNINFO and exchange implementation announcements,AKShare stock_dividend_cninfo,allowed,unknown,allowed,allowed,allowed,restricted,announcement-date,collect_then_verify
+financial_statements,Company and exchange periodic reports,AKShare Eastmoney statement endpoints,allowed,unknown,allowed,allowed,allowed,restricted,notice-date-and-update-date,collect_then_verify
+etf_distribution_history,Shanghai Stock Exchange fund announcements,AKShare fund_etf_dividend_sina,allowed,unknown,allowed,allowed,allowed,restricted,ex-date-assumed,collect_then_verify
+etf_distribution_contract,Fund contract filed at Shanghai Stock Exchange,None,allowed,unknown,allowed,allowed,allowed,restricted,published-version,manual_primary_verification
+index_methodology,China Securities Index Company,None,allowed,unknown,allowed,allowed,allowed,restricted,published-version,manual_primary_verification
+tax_rule_a_share_dividend,State Taxation Administration,None,allowed,unknown,allowed,allowed,allowed,restricted,effective-date,manual_primary_verification
+tax_rule_fund_distribution,Fund announcement plus tax authority,None,allowed,unknown,allowed,allowed,allowed,restricted,effective-date,manual_primary_verification

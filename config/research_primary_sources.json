@@ -1,0 +1,133 @@
+{
+  "schema_version": "research-primary-sources-v1",
+  "research_as_of": "2026-08-07T15:00:00+08:00",
+  "sources": [
+    {
+      "source_id": "MIDEA_2025_ANNUAL",
+      "instrument_id": "CN.XSHE.000333",
+      "publisher": "深圳证券交易所",
+      "published_at": "2026-03-31",
+      "source_tier": "primary",
+      "url": "https://disc.static.szse.cn/download/disc/disk03/finalpage/2026-03-31/70e81c5f-97d4-4c87-8e4b-fcc5a3bcd361.PDF",
+      "coverage": ["FY2025 income statement", "cash flow", "EPS", "ROE", "overseas revenue"]
+    },
+    {
+      "source_id": "MIDEA_2026Q1",
+      "instrument_id": "CN.XSHE.000333",
+      "publisher": "深圳证券交易所",
+      "published_at": "2026-04-30",
+      "source_tier": "primary",
+      "url": "https://disc.static.szse.cn/download/disc/disk03/finalpage/2026-04-30/94fd7f9f-c1f7-4a30-8d6a-5a366aeec23b.PDF",
+      "coverage": ["Q1 2026 income statement", "cash flow", "segment revenue"]
+    },
+    {
+      "source_id": "FANGDA_2025_ANNUAL",
+      "instrument_id": "CN.XSHG.600507",
+      "publisher": "法定信息披露平台（上交所披露文件镜像）",
+      "published_at": "2026-03-20",
+      "source_tier": "primary",
+      "url": "https://dataclouds.cninfo.com.cn/shgonggao/hsomarket/2026/20260320/d18d21cc246c40eb987aca120659d8a7.PDF",
+      "coverage": ["FY2025 income statement", "cash flow", "EPS", "steel operating data"]
+    },
+    {
+      "source_id": "FANGDA_2026Q1",
+      "instrument_id": "CN.XSHG.600507",
+      "publisher": "上交所公告转载页",
+      "published_at": "2026-04-28",
+      "source_tier": "secondary_locator",
+      "url": "https://paper.cnstock.com/html/2026-04/28/content_2208663.htm",
+      "coverage": ["Q1 2026 report locator", "Q1 operating disclosure locator"],
+      "limitation": "正式上交所PDF的本地冻结副本待补。"
+    },
+    {
+      "source_id": "CYPC_2025_BOARD_REPORT",
+      "instrument_id": "CN.XSHG.600900",
+      "publisher": "法定信息披露平台（上交所披露文件镜像）",
+      "published_at": "2026-04-30",
+      "source_tier": "primary",
+      "url": "https://dataclouds.cninfo.com.cn/shgonggao/hsomarket/2026/20260430/0ae3b79eb91b445e84abb213e8ec393e.PDF",
+      "coverage": ["FY2025 generation", "profit", "EPS", "assets", "leverage"]
+    },
+    {
+      "source_id": "CYPC_2026Q1",
+      "instrument_id": "CN.XSHG.600900",
+      "publisher": "法定信息披露平台（上交所披露文件镜像）",
+      "published_at": "2026-04-29",
+      "source_tier": "primary",
+      "url": "https://dataclouds.cninfo.com.cn/shgonggao/hsomarket/2026/20260429/3516ef727b66427790b5a7a745ffb660.PDF",
+      "coverage": ["Q1 2026 income statement", "cash flow", "EPS"]
+    },
+    {
+      "source_id": "ICBC_2025_ANNUAL",
+      "instrument_id": "CN.XSHG.601398",
+      "publisher": "中国工商银行",
+      "published_at": "2026-03-27",
+      "source_tier": "primary",
+      "url": "https://v.icbc.com.cn/userfiles/resources/icbcltd/download/2026/2026032706.pdf",
+      "coverage": ["FY2025 income statement", "net profit", "EPS", "revenue"]
+    },
+    {
+      "source_id": "ICBC_2025_FINANCIAL_SUMMARY",
+      "instrument_id": "CN.XSHG.601398",
+      "publisher": "中国工商银行",
+      "published_at": "2026-03-27",
+      "source_tier": "primary",
+      "url": "https://icbc.com.cn/ICBCLtd/%E6%8A%95%E8%B5%84%E8%80%85%E5%85%B3%E7%B3%BB/%E8%B4%A2%E5%8A%A1%E4%BF%A1%E6%81%AF/%E8%B4%A2%E5%8A%A1%E6%A6%82%E8%A6%81/",
+      "coverage": ["NPL ratio", "coverage ratio", "CET1 ratio", "capital ratio"]
+    },
+    {
+      "source_id": "ICBC_2026Q1_PILLAR3",
+      "instrument_id": "CN.XSHG.601398",
+      "publisher": "中国工商银行",
+      "published_at": "2026-04-29",
+      "source_tier": "primary",
+      "url": "https://v.icbc.com.cn/userfiles/resources/icbcltd/download/2026/Pillar3infoCh20260429.pdf",
+      "coverage": ["Q1 2026 regulatory capital", "risk weighted assets", "leverage"]
+    },
+    {
+      "source_id": "ETF_512890_PRODUCT",
+      "instrument_id": "CN.XSHG.512890",
+      "publisher": "上海证券交易所",
+      "published_at": "2025-03-25",
+      "source_tier": "primary",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-03-25/512890_20250325_EREI.pdf",
+      "coverage": ["product identity", "benchmark", "tracking objective"]
+    },
+    {
+      "source_id": "ETF_512890_CONTRACT",
+      "instrument_id": "CN.XSHG.512890",
+      "publisher": "上海证券交易所",
+      "published_at": "2025-03-20",
+      "source_tier": "primary",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-03-20/512890_20250320_ZAVR.pdf",
+      "coverage": ["distribution policy"]
+    },
+    {
+      "source_id": "ETF_563020_PRODUCT",
+      "instrument_id": "CN.XSHG.563020",
+      "publisher": "上海证券交易所",
+      "published_at": "2023-12-08",
+      "source_tier": "primary",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2023-12-08/563020_20231208_SBLS.pdf",
+      "coverage": ["product identity", "benchmark", "tracking objective"]
+    },
+    {
+      "source_id": "ETF_563020_2026Q1",
+      "instrument_id": "CN.XSHG.563020",
+      "publisher": "上海证券交易所",
+      "published_at": "2026-04-22",
+      "source_tier": "primary",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2026-04-22/563020_20260422_KJJX.pdf",
+      "coverage": ["Q1 2026 report", "fund shares", "tracking objective"]
+    },
+    {
+      "source_id": "CSI_H30269_METHOD",
+      "instrument_id": "INDEX.CSI.H30269",
+      "publisher": "中证指数有限公司",
+      "published_at": "2020-12-01",
+      "source_tier": "primary",
+      "url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/indices/detail/files/zh_CN/H30269_Index_Methodology_cn.pdf",
+      "coverage": ["index selection", "weighting", "methodology version"]
+    }
+  ]
+}

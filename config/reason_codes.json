@@ -1,0 +1,21 @@
+{
+  "schema_version": "reason-codes-v1",
+  "codes": {
+    "MISSING_CRITICAL_FIELD": "关键字段缺失",
+    "SOURCE_CONFLICT": "来源冲突未解决",
+    "PIT_VIOLATION": "使用了研究时点之后的信息",
+    "DIV_EVENT_IDENTITY_CONFLICT": "分红逻辑事件身份无法确定",
+    "DIV_CASH_COVERAGE_FAIL": "分红现金覆盖失败",
+    "DIV_DEBT_CONSTRAINT_FAIL": "债务或契约限制分红",
+    "DIV_CAPITAL_CONSTRAINT_FAIL": "资本或监管约束失败",
+    "CYCLICAL_NORMALIZATION_FAIL": "周期正常化后分红不可持续",
+    "VALUATION_CONFLICT": "独立估值与收益率锚点冲突",
+    "TAX_CONTEXT_INCOMPLETE": "税务身份、批次或规则不完整",
+    "ETF_BENCHMARK_UNKNOWN": "ETF基准或方法版本未知",
+    "HOLDINGS_STALE": "持仓披露滞后",
+    "PORTFOLIO_ISSUER_LIMIT": "单一发行人暴露超限",
+    "PORTFOLIO_INDUSTRY_LIMIT": "单一行业暴露超限",
+    "LICENSE_RESTRICTED": "数据许可限制当前用途",
+    "UNSUPPORTED_CORPORATE_ACTION": "公司行动尚无确定处理规则"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "schema_version": "primary-source-registry-v1",
+  "research_as_of": "2026-08-07T15:00:00+08:00",
+  "usage_scope": "internal_research_only",
+  "sources": [
+    {
+      "source_id": "SSE_512890_PRODUCT_SUMMARY_20250325",
+      "field_group": "etf_identity_and_benchmark",
+      "instrument_id": "CN.XSHG.512890",
+      "publisher": "上海证券交易所",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-03-25/512890_20250325_EREI.pdf",
+      "status": "primary_verified",
+      "notes": "基金代码、上市日期和标的指数核验。"
+    },
+    {
+      "source_id": "SSE_563020_PRODUCT_SUMMARY_20231208",
+      "field_group": "etf_identity_and_benchmark",
+      "instrument_id": "CN.XSHG.563020",
+      "publisher": "上海证券交易所",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2023-12-08/563020_20231208_SBLS.pdf",
+      "status": "primary_verified",
+      "notes": "基金代码、基金合同生效日和标的指数核验。"
+    },
+    {
+      "source_id": "CSI_H30269_METHODOLOGY_V1_1",
+      "field_group": "index_methodology",
+      "instrument_id": "INDEX.CSI.H30269",
+      "publisher": "中证指数有限公司",
+      "url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/indices/detail/files/zh_CN/H30269_Index_Methodology_cn.pdf",
+      "status": "primary_verified",
+      "notes": "中证红利低波动指数H30269，方法版本V1.1。"
+    },
+    {
+      "source_id": "SSE_512890_FUND_CONTRACT_20250320",
+      "field_group": "etf_distribution_contract",
+      "instrument_id": "CN.XSHG.512890",
+      "publisher": "上海证券交易所",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-03-20/512890_20250320_ZAVR.pdf",
+      "status": "primary_verified",
+      "notes": "收益分配触发条件与频率核验。"
+    },
+    {
+      "source_id": "SSE_563020_DISTRIBUTION_20260306",
+      "field_group": "etf_distribution_event",
+      "instrument_id": "CN.XSHG.563020",
+      "publisher": "上海证券交易所",
+      "url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2026-03-06/563020_20260306_UGLN.pdf",
+      "status": "primary_verified",
+      "notes": "2026年收益分配事件核验入口。"
+    },
+    {
+      "source_id": "STA_DIVIDEND_TAX_20150907",
+      "field_group": "tax_rule_a_share_dividend",
+      "instrument_id": null,
+      "publisher": "国家税务总局",
+      "url": "https://www.chinatax.gov.cn/n810341/n810755/c1797427/content.html",
+      "status": "primary_verified",
+      "notes": "上市公司股息红利差别化个人所得税规则。"
+    },
+    {
+      "source_id": "STA_FIFO_DIVIDEND_TAX_POLICY",
+      "field_group": "tax_lot_matching",
+      "instrument_id": null,
+      "publisher": "国家税务总局天津市税务局",
+      "url": "https://tianjin.chinatax.gov.cn/11200000000/0300/030004/03000418/20260122140336284.shtml",
+      "status": "primary_verified",
+      "notes": "先进先出持股期限计算规则核验入口。"
+    }
+  ]
+}

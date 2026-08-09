@@ -1,0 +1,13 @@
+{
+  "schema_version": "formula-registry-v1",
+  "formulas": {
+    "DIV_YIELD_TTM_V1": "sum(implemented_cash_dps where ex_date in (as_of-12m, as_of]) / unadjusted_close_as_of",
+    "DIV_YIELD_FORWARD_SCENARIO_V1": "scenario_sustainable_dps / current_realisable_price",
+    "YIELD_IMPLIED_PRICE_V1": "scenario_sustainable_dps / scenario_target_yield",
+    "TOTAL_RETURN_MARKET_V1": "(unadjusted_close_t + ex_date_cash_distribution_t) / unadjusted_close_t_minus_1 - 1",
+    "TAX_CN_A_INDIVIDUAL_V1": "gross_dividend * rate_by_fifo_holding_period_at_disposal",
+    "PORTFOLIO_WEIGHT_V1": "exposure_cny / principal_cny"
+  },
+  "display_yield_anchors": ["0.0500", "0.0550", "0.0600"],
+  "user_target_yield": null
+}

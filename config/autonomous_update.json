@@ -1,0 +1,53 @@
+{
+  "schema_version": "autonomous-update-config-v2",
+  "timezone": "Asia/Shanghai",
+  "market_close_hour": 18,
+  "market_close_minute": 30,
+  "minimum_stock_master": 3000,
+  "minimum_etf_master": 100,
+  "minimum_stock_price_coverage": 0.90,
+  "minimum_etf_price_coverage": 0.80,
+  "minimum_cross_source_overlap": 0.50,
+  "maximum_price_difference_ratio": 0.003,
+  "maximum_price_mismatch_ratio": 0.05,
+  "source_timeout_seconds": 90,
+  "maximum_attempts_per_trade_date": 3,
+  "sources": [
+    {
+      "source_id": "baostock_all_stock_master",
+      "role": "security_master_primary",
+      "adapter": "baostock_all_stock",
+      "enabled": true,
+      "cadence": "daily_after_close",
+      "terms_status": "free_convenience_source_internal_research_only",
+      "rate_limit_note": "One login and one all-stock snapshot per scheduled run."
+    },
+    {
+      "source_id": "tencent_qt_batch_quote",
+      "role": "market_price_primary",
+      "adapter": "tencent_batch_quote",
+      "enabled": true,
+      "cadence": "daily_after_close",
+      "terms_status": "public_quote_endpoint_internal_research_only",
+      "rate_limit_note": "Batch requests of at most 100 symbols; no access-control bypass."
+    },
+    {
+      "source_id": "baostock_history_sample_validator",
+      "role": "market_price_sample_validator",
+      "adapter": "baostock_sample",
+      "enabled": true,
+      "cadence": "daily_after_close",
+      "terms_status": "free_convenience_source_internal_research_only",
+      "rate_limit_note": "Deterministic sample of at most 40 securities."
+    },
+    {
+      "source_id": "akshare_sina_trade_calendar",
+      "role": "trade_calendar",
+      "adapter": "tool_trade_date_hist_sina",
+      "enabled": true,
+      "cadence": "daily_after_close",
+      "terms_status": "free_convenience_source_internal_research_only",
+      "rate_limit_note": "One scheduled call; used only to avoid holiday mislabelling."
+    }
+  ]
+}

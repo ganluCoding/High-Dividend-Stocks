@@ -1,0 +1,102 @@
+{
+  "schema_version": "golden-fixtures-v2",
+  "research_as_of": "2026-08-07T15:00:00+08:00",
+  "input_document_hashes": [
+    {"document_id": "formula-registry-v1", "sha256": "e9884f94fec254e209bf37f97df03a797cf8800b770a42e7af14dddb3f1119d3"},
+    {"document_id": "reason-codes-v1", "sha256": "4ea501c22e1bee1683afe3df4bea86bd58c617449d1bcd3e69748938afe588a0"}
+  ],
+  "fixtures": [
+    {
+      "fixture_id": "SYN-TRAP-001",
+      "instrument_id": "SYN.INSTRUMENT.TRAP001",
+      "applicable_test_ids": ["GOLDEN-07"],
+      "inputs": {
+        "price": "10.00",
+        "ttm_dps": "0.80",
+        "normalized_eps": "0.20",
+        "prudent_payout_cap": "0.60",
+        "parent_distributable_cash_per_share": "0.05",
+        "maintenance_fcf_per_share": "-0.05",
+        "debt_distribution_constraint_failed": true
+      },
+      "expected": {
+        "ttm_yield": "0.08",
+        "instrument_status": "排除",
+        "reason_codes": ["DIV_CASH_COVERAGE_FAIL", "DIV_DEBT_CONSTRAINT_FAIL"],
+        "yield_implied_price": null
+      },
+      "absolute_tolerance": "0.00000001"
+    },
+    {
+      "fixture_id": "SYN-CA-001",
+      "instrument_id": "SYN.INSTRUMENT.CA001",
+      "applicable_test_ids": ["GOLDEN-06"],
+      "inputs": {
+        "starting_units": "1.0",
+        "previous_close": "10.0",
+        "bonus_units_per_unit": "0.5",
+        "ex_date_close": "6.6666666667",
+        "cash_distribution": "0.0"
+      },
+      "expected": {
+        "ending_units": "1.5",
+        "total_return": "0.0",
+        "reason_codes": []
+      },
+      "absolute_tolerance": "0.00000001"
+    },
+    {
+      "fixture_id": "SYN-TAX-A-001",
+      "instrument_id": "SYN.INSTRUMENT.TAXA001",
+      "applicable_test_ids": ["GOLDEN-11"],
+      "inputs": {"units": "1000", "dps": "0.50"},
+      "expected": {
+        "tax_by_holding_days": {"20": "100.00", "180": "50.00", "400": "0.00"},
+        "reason_codes": []
+      },
+      "absolute_tolerance": "0.01"
+    },
+    {
+      "fixture_id": "SYN-TAX-ETF-001",
+      "instrument_id": "SYN.INSTRUMENT.TAXETF001",
+      "applicable_test_ids": ["GOLDEN-11"],
+      "inputs": {"units": "1000", "distribution_per_unit": "0.10"},
+      "expected": {"tax": "0.00", "reason_codes": []},
+      "absolute_tolerance": "0.01"
+    },
+    {
+      "fixture_id": "SYN-IPS-001",
+      "instrument_id": "SYN.INSTRUMENT.IPS001",
+      "applicable_test_ids": ["GOLDEN-12"],
+      "inputs": {
+        "principal_cny": "200000.00",
+        "issuer_limit": "0.10",
+        "existing_issuer_exposure_cny": "16000.00",
+        "new_exposure_cny": "10000.00"
+      },
+      "expected": {
+        "combined_weight": "0.13",
+        "instrument_status": "合格",
+        "portfolio_status": "超限",
+        "reason_codes": ["PORTFOLIO_ISSUER_LIMIT"]
+      },
+      "absolute_tolerance": "0.00000001"
+    },
+    {
+      "fixture_id": "SYN-MISSING-001",
+      "instrument_id": "SYN.INSTRUMENT.MISSING001",
+      "applicable_test_ids": ["GOLDEN-13"],
+      "inputs": {
+        "price": "10.00",
+        "ttm_dps": "0.50",
+        "parent_distributable_cash_per_share": null
+      },
+      "expected": {
+        "instrument_status": "资料不足",
+        "reason_codes": ["MISSING_CRITICAL_FIELD"],
+        "yield_implied_price": null
+      },
+      "absolute_tolerance": "0.00000001"
+    }
+  ]
+}

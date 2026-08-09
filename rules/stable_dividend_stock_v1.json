@@ -1,0 +1,21 @@
+{
+  "rule_id": "stable_dividend_stock",
+  "rule_version": "1.0.0",
+  "scope": "a_share_common_stock",
+  "status": "active",
+  "required_parameters": {
+    "minimum_ordinary_dividend_years": 3,
+    "minimum_ordinary_ttm_cash_yield": 0.02,
+    "excluded_dividend_styles": ["周期分红"],
+    "required_datasets": ["market_prices", "stock_dividends", "financials"]
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "MISSING_TAXONOMY": "缺少受控行业与分红风格分类",
+    "CYCLE_EXCLUDED": "周期性分红标的不纳入稳健分红模板",
+    "MISSING_COVERAGE": "关键价格、分红或财务事实不足",
+    "DIVIDEND_HISTORY_SHORT": "常规已实施现金分红观察期不足",
+    "ORDINARY_YIELD_BELOW_ENTRY": "常规历史现金收益率未达到该研究模板入口",
+    "PASS": "满足本模板的数据与历史规则；不代表估值合理或买入建议"
+  }
+}

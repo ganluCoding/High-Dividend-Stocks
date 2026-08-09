@@ -1,0 +1,18 @@
+{
+  "rule_id": "dividend_etf",
+  "rule_version": "1.0.0",
+  "scope": "domestic_equity_dividend_index_etf",
+  "status": "active",
+  "required_parameters": {
+    "minimum_distribution_years": 1,
+    "required_datasets": ["market_prices", "etf_distributions", "etf_product_facts"],
+    "require_product_facts": true
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "MISSING_PRODUCT_FACTS": "缺少指数、产品分类、费率或持仓披露等产品事实",
+    "MISSING_COVERAGE": "关键价格或实际分配资料不足",
+    "DISTRIBUTION_HISTORY_SHORT": "实际现金分配观察期不足",
+    "PASS": "满足 ETF 研究资料规则；现金分配率不是股息率或总回报"
+  }
+}
