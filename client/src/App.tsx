@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { bootstrapRuntime, Candidate, core, Coverage, Dashboard, runtimeStatus, Strategy, StrategyRun } from "./core";
 
-type Page = "home" | "research" | "strategies" | "draft" | "method";
+type Page = "progress" | "home" | "research" | "strategies" | "draft" | "method";
 
 function formatDate(value?: string) {
   if (!value) return "未知";
@@ -18,7 +18,7 @@ function metric(candidate: Candidate, lane?: Strategy["lane"]) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>("progress");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [activeStrategy, setActiveStrategy] = useState<Strategy | null>(null);
   const [run, setRun] = useState<StrategyRun | null>(null);
@@ -26,6 +26,7 @@ export default function App() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const loadDashboard = async () => {
     setBusy(true);
@@ -39,6 +40,7 @@ export default function App() {
       if (!runtime.code_ready) throw new Error(`研究内核未就绪：${runtime.missing.join("、")}`);
       if (!runtime.data_ready) throw new Error("本机事实发布包未就绪，请先部署数据运行时");
       setDashboard(await core<Dashboard>("dashboard"));
+      setLastRefreshedAt(new Date());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法读取本机发布包");
     } finally {
@@ -47,6 +49,10 @@ export default function App() {
   };
 
   useEffect(() => { void loadDashboard(); }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => { void loadDashboard(); }, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const openStrategy = async (strategy: Strategy) => {
     setActiveStrategy(strategy);
@@ -87,6 +93,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">高</span><div><strong>高股息研究</strong><small>本机 · 研究版</small></div></div>
         <nav>
+          <button className={page === "progress" ? "nav-item active" : "nav-item"} onClick={() => setPage("progress")}>数据补齐进度</button>
           <button className={page === "home" ? "nav-item active" : "nav-item"} onClick={() => setPage("home")}>今天看什么</button>
           <button className={page === "strategies" ? "nav-item active" : "nav-item"} onClick={() => setPage("strategies")}>策略库</button>
           <button className={page === "research" ? "nav-item active" : "nav-item"} onClick={() => setPage("research")}>候选与解释</button>
@@ -96,8 +103,9 @@ export default function App() {
         <div className="sidebar-foot">不连接券商 · 不自动交易<br />历史现金分配不是未来承诺</div>
       </aside>
       <main className="main-content">
-        <header className="topbar"><span>研究工作台</span><span className="offline-pill"><i />本机离线</span></header>
+        <header className="topbar"><span>研究工作台</span><span className="offline-pill"><i />每5分钟自动刷新</span></header>
         {error && <div className="error-banner">{error}<button onClick={() => setError(null)}>×</button></div>}
+        {page === "progress" && <ProgressPage dashboard={dashboard} busy={busy} lastRefreshedAt={lastRefreshedAt} onRefresh={loadDashboard} />}
         {page === "home" && <Home dashboard={dashboard} busy={busy} onRefresh={loadDashboard} onStrategy={openStrategy} onStrategies={() => setPage("strategies")} />}
         {page === "strategies" && <StrategyLibrary strategies={dashboard?.strategies ?? []} onOpen={openStrategy} />}
         {page === "research" && <ResearchPage strategy={activeStrategy} run={run} candidates={visibleCandidates} busy={busy} selected={selected} onSelect={setSelected} onWatch={saveWatch} onBack={() => setPage("strategies")} />}
@@ -106,6 +114,10 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function ProgressPage({ dashboard, busy, lastRefreshedAt, onRefresh }: { dashboard: Dashboard | null; busy: boolean; lastRefreshedAt: Date | null; onRefresh: () => void }) {
+  return <section className="page progress-page"><p className="eyebrow">本机数据监视器</p><div className="progress-heading"><div><h1>数据补齐进度</h1><p className="lead">每5分钟读取一次本机最新发布包；只显示已通过发布门禁的数据。</p></div><button className="primary-button refresh-button" onClick={onRefresh} disabled={busy}>{busy ? "刷新中…" : "立即刷新"}</button></div>{dashboard ? <><div className="progress-release"><strong>{dashboard.release.release_id}</strong><span>上次刷新：{lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div><CoverageList coverage={dashboard.release.coverage} /><div className="progress-note">历史价格达到正式回测门槛前，结果会标记为“覆盖受限诊断”；ETF事实仍单独统计。</div></> : <div className="empty-state">{busy ? "正在读取本机发布包…" : "本机发布包尚未可读。"}</div>}</section>;
 }
 
 function Home({ dashboard, busy, onRefresh, onStrategy, onStrategies }: { dashboard: Dashboard | null; busy: boolean; onRefresh: () => void; onStrategy: (strategy: Strategy) => void; onStrategies: () => void }) {
@@ -145,10 +157,14 @@ function DraftPage() {
 }
 
 function MethodPage({ dashboard }: { dashboard: Dashboard | null }) {
-  return <section className="page"><p className="eyebrow">数据与方法</p><h1>每个结论都有出处</h1><p className="lead">这里显示发布版本、口径和覆盖状态；进度条只表示资料已采集比例，不代表数据已经完成一级来源核验。</p><div className="method-card"><div><label>当前发布</label><strong>{dashboard?.release.release_id ?? "未读取"}</strong></div><div><label>事实哈希</label><code>{dashboard?.release.facts_sha256?.slice(0, 20) ?? "—"}…</code></div><div><label>价格口径</label><strong>已发布收盘价（日期）</strong></div><div><label>现金口径</label><strong>过去 12 个月已实施、税前历史参考</strong></div></div><h2 className="subheading">数据覆盖进度</h2><div className="coverage-list">{dashboard?.release.coverage.map((item) => { const ratio = item.instruments ? Math.max(0, Math.min(100, item.collected / item.instruments * 100)) : 0; return <div key={item.dataset} className="coverage-item"><div className="coverage-head"><span>{datasetLabel(item.dataset)}</span><strong>{item.collected.toLocaleString()} / {item.instruments.toLocaleString()}</strong></div><div className="progress-track" aria-label={`${datasetLabel(item.dataset)} ${ratio.toFixed(1)}%`}><div className="progress-fill" style={{ width: `${ratio}%` }} /></div><small>{ratio.toFixed(1)}% 已采集 · 平均完整度 {(item.average_completeness * 100).toFixed(1)}%</small></div>; })}</div></section>;
+  return <section className="page"><p className="eyebrow">数据与方法</p><h1>每个结论都有出处</h1><p className="lead">这里显示发布版本、口径和覆盖状态；进度条只表示资料已采集比例，不代表数据已经完成一级来源核验。</p><div className="method-card"><div><label>当前发布</label><strong>{dashboard?.release.release_id ?? "未读取"}</strong></div><div><label>事实哈希</label><code>{dashboard?.release.facts_sha256?.slice(0, 20) ?? "—"}…</code></div><div><label>价格口径</label><strong>已发布收盘价（日期）</strong></div><div><label>现金口径</label><strong>过去 12 个月已实施、税前历史参考</strong></div></div><h2 className="subheading">数据覆盖进度</h2><CoverageList coverage={dashboard?.release.coverage ?? []} /></section>;
+}
+
+function CoverageList({ coverage }: { coverage: Coverage[] }) {
+  return <div className="coverage-list">{coverage.map((item) => { const ratio = item.instruments ? Math.max(0, Math.min(100, item.collected / item.instruments * 100)) : 0; return <div key={item.dataset} className="coverage-item"><div className="coverage-head"><span>{datasetLabel(item.dataset)}</span><strong>{item.collected.toLocaleString()} / {item.instruments.toLocaleString()}</strong></div><div className="progress-track" aria-label={`${datasetLabel(item.dataset)} ${ratio.toFixed(1)}%`}><div className="progress-fill" style={{ width: `${ratio}%` }} /></div><small>{ratio.toFixed(1)}% 已采集 · 平均完整度 {(item.average_completeness * 100).toFixed(1)}%</small></div>; })}</div>;
 }
 
 function datasetLabel(dataset: string) {
-  const labels: Record<string, string> = { market_prices: "全市场最新价格", price_history: "历史价格", stock_dividends: "股票分红事件", financials: "股票财务事实", etf_distributions: "ETF分配事件", etf_product_facts: "ETF产品事实" };
+  const labels: Record<string, string> = { market_prices: "全市场最新价格", price_history: "历史价格（已采集标的）", stock_dividends: "股票分红事件", financials: "股票财务事实", etf_distributions: "ETF分配事件", etf_product_facts: "ETF产品事实" };
   return labels[dataset] ?? dataset;
 }
