@@ -1,0 +1,11 @@
+{
+  "strategy_id": "china_high_dividend_low_vol_proxy_research",
+  "strategy_version": "1.0.0",
+  "name": "高股息后再选低波动",
+  "lane": "stable",
+  "rule_file": "china_high_dividend_low_vol_proxy_v1.json",
+  "purpose": "参考标普中国 A 股高股息低波方法，先取历史股息率较高的 150 只，再取一年价格波动较低的 100 只。",
+  "suitable_for": "希望降低单纯追逐高股息所带来的价格波动和收益率陷阱暴露的研究者。",
+  "excludes": "ST、流动性不足、历史交易日不足或无 TTM 常规分红的股票；不是标普指数复刻。",
+  "review_triggers": ["季度复核", "分红实施", "价格历史补齐", "方法规则变更"]
+}

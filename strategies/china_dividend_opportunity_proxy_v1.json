@@ -1,0 +1,11 @@
+{
+  "strategy_id": "china_dividend_opportunity_proxy_research",
+  "strategy_version": "1.0.0",
+  "name": "红利机会与支付能力",
+  "lane": "stable",
+  "rule_file": "china_dividend_opportunity_proxy_v1.json",
+  "purpose": "参考标普中国 A 股红利机会方法，在连续两年分红、支付率和流动性门槛后按历史 TTM 股息率研究前 100。",
+  "suitable_for": "希望在较宽的全市场范围内建立高股息研究清单，再做企业质量与周期复核的研究者。",
+  "excludes": "ST、连续分红不足、支付率异常或成交额不足的股票；不是标普指数复刻。",
+  "review_triggers": ["半年复核", "年度报告", "分红实施", "方法规则变更"]
+}

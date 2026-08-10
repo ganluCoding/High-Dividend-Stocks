@@ -1,0 +1,11 @@
+{
+  "strategy_id": "sse_dividend_quality_proxy_research",
+  "strategy_version": "1.0.0",
+  "name": "连续分红与合理支付率",
+  "lane": "stable",
+  "rule_file": "sse_dividend_quality_proxy_v1.json",
+  "purpose": "参考上证红利公开规则，研究连续分红、支付率合理且三年历史股息率较高的股票。",
+  "suitable_for": "希望先排除分红中断和明显支付率异常，再逐只核验公司的长期研究者。",
+  "excludes": "ST、三年财务或价格资料不足，以及排名未进入研究截面的股票；不是上证红利指数复刻。",
+  "review_triggers": ["下一次年报", "分红方案变更", "年度数据补齐", "规则方法修订"]
+}

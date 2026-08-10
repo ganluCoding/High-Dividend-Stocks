@@ -30,6 +30,7 @@ def main() -> int:
         "scripts/release_protocol.py",
         "scripts/publish_release.py",
         "scripts/run_screen.py",
+        "scripts/researched_strategy_rules.py",
         "scripts/strategy_engine.py",
         "scripts/desktop_core.py",
         "scripts/collect_price_history.py",

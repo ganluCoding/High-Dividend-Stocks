@@ -12,12 +12,13 @@ from pathlib import Path
 from typing import Any
 
 from release_protocol import resolve_release
+from researched_strategy_rules import run_researched_stock_rule
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUNTIME_ROOT = Path.home() / "Library" / "Application Support" / "HighDividend"
 DEFAULT_WORKBENCH = DEFAULT_RUNTIME_ROOT / "workbench.db"
-ENGINE_VERSION = "screen-engine-v1"
+ENGINE_VERSION = "screen-engine-v2-public-method-proxies"
 
 
 def utc_now() -> str:
@@ -333,6 +334,12 @@ def main() -> int:
             results = run_etf_rule(facts_connection, rule, manifest["available_cutoff"])
         elif rule["rule_id"] == "cyclical_dividend_watch":
             results = run_cyclical_rule(facts_connection, rule, taxonomy, manifest["available_cutoff"])
+        elif rule["rule_id"] in {
+            "sse_dividend_quality_proxy",
+            "china_high_dividend_low_vol_proxy",
+            "china_dividend_opportunity_proxy",
+        }:
+            results = run_researched_stock_rule(facts_connection, rule, manifest["available_cutoff"])
         else:
             raise SystemExit(f"Unsupported rule id: {rule['rule_id']}")
     screen_run_id = hashlib.sha256(f"{manifest['release_id']}:{manifest['facts_sha256']}:{rule_hash}:{taxonomy_hash}:{ENGINE_VERSION}".encode()).hexdigest()[:24]

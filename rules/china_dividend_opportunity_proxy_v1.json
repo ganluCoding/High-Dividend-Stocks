@@ -1,0 +1,31 @@
+{
+  "rule_id": "china_dividend_opportunity_proxy",
+  "rule_version": "1.0.0",
+  "scope": "a_share_current_snapshot_research",
+  "status": "active",
+  "required_parameters": {
+    "target_count": 100,
+    "minimum_trading_days": 90,
+    "minimum_advt_cny": 20000000,
+    "advt_calendar_days": 183,
+    "required_datasets": ["market_prices", "price_history", "stock_dividends", "financials"]
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "ST_EXCLUDED": "当前证券简称带 ST 或 *ST",
+    "MISSING_CURRENT_PRICE": "缺少当前已发布收盘价",
+    "DIVIDEND_PAYMENT_HISTORY_SHORT": "最近两个完整财年未连续记录常规现金分红",
+    "MISSING_ANNUAL_EPS": "缺少最新完整财年每股收益",
+    "PAYOUT_OUTSIDE_RANGE": "最新财年每股收益非正或股利支付率不在 0 到 100% 之间",
+    "MISSING_TURNOVER": "缺少近六个月成交额",
+    "MISSING_SIX_MONTH_PRICE_HISTORY": "近六个月有效交易日不足 90 日",
+    "LIQUIDITY_BELOW_ENTRY": "近六个月平均日成交额低于 2000 万元",
+    "NO_ORDINARY_TTM_DIVIDEND": "过去 12 个月没有已实施常规现金分红",
+    "RANK_BELOW_CUTOFF": "合格股票中历史 TTM 股息率排名未进入前 100",
+    "PASS": "进入红利机会公开方法研究代理的前 100 个研究位置"
+  },
+  "methodology_sources": [
+    "https://www.spglobal.com/spdji/en/documents/methodologies/methodology-sp-dividend-opportunities.pdf"
+  ],
+  "replication_status": "research_proxy_not_index_replication"
+}

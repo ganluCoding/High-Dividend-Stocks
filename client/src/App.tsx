@@ -121,7 +121,7 @@ function ProgressPage({ dashboard, busy, lastRefreshedAt, onRefresh }: { dashboa
 }
 
 function Home({ dashboard, busy, onRefresh, onStrategy, onStrategies }: { dashboard: Dashboard | null; busy: boolean; onRefresh: () => void; onStrategy: (strategy: Strategy) => void; onStrategies: () => void }) {
-  const stable = dashboard?.strategies.find((item) => item.lane === "stable");
+  const stable = dashboard?.strategies.find((item) => item.strategy_id === "stable_dividend_stock_research");
   const stableCount = dashboard?.latest_runs[stable?.strategy_id ?? ""] ? "已运行" : "等待运行";
   return <section className="page home-page">
     <div className="hero"><div><p className="eyebrow">今天看什么</p><h1>先看清楚，<em>再决定。</em></h1><p className="hero-copy">这是你的本地高股息研究台。先从资料完整的企业开始，ETF 和周期标的分别看，不把一个历史收益率当成答案。</p></div><div className="hero-orb">200k<span>研究本金基准</span></div></div>
@@ -137,7 +137,7 @@ function Home({ dashboard, busy, onRefresh, onStrategy, onStrategies }: { dashbo
 }
 
 function StrategyLibrary({ strategies, onOpen }: { strategies: Strategy[]; onOpen: (strategy: Strategy) => void }) {
-  return <section className="page"><p className="eyebrow">策略库</p><h1>三种研究方式</h1><p className="lead">策略是研究框架，不是自动买卖信号。每次运行都会固定发布版本和规则版本。</p><div className="library-list">{strategies.map((strategy) => <div className={`library-row ${strategy.lane}`} key={strategy.strategy_id}><div className="lane-tag">{strategy.lane === "stable" ? "稳健" : strategy.lane === "etf" ? "ETF" : "周期"}</div><div className="library-copy"><h3>{strategy.name}</h3><p>{strategy.purpose}</p><small>适合：{strategy.suitable_for}</small><small>不包含：{strategy.excludes}</small></div><button className="outline-button" onClick={() => onOpen(strategy)}>打开</button></div>)}</div></section>;
+  return <section className="page"><p className="eyebrow">策略库</p><h1>多种研究方式</h1><p className="lead">策略是研究框架，不是自动买卖信号。每次运行都会固定发布版本和规则版本。</p><div className="library-list">{strategies.map((strategy) => <div className={`library-row ${strategy.lane}`} key={strategy.strategy_id}><div className="lane-tag">{strategy.lane === "stable" ? "股票" : strategy.lane === "etf" ? "ETF" : "周期"}</div><div className="library-copy"><h3>{strategy.name}</h3><p>{strategy.purpose}</p><small>适合：{strategy.suitable_for}</small><small>不包含：{strategy.excludes}</small></div><button className="outline-button" onClick={() => onOpen(strategy)}>打开</button></div>)}</div></section>;
 }
 
 function ResearchPage({ strategy, run, candidates, busy, selected, onSelect, onWatch, onBack }: { strategy: Strategy | null; run: StrategyRun | null; candidates: Candidate[]; busy: boolean; selected: Candidate | null; onSelect: (candidate: Candidate | null) => void; onWatch: () => void; onBack: () => void }) {

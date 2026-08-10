@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = PROJECT_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 from release_protocol import resolve_release, validate_release  # noqa: E402
+from researched_strategy_rules import run_researched_stock_rule  # noqa: E402
 from run_screen import run_stock_rule  # noqa: E402
 
 
@@ -178,6 +179,50 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             select_statements = [statement for statement in statements if statement.lstrip().upper().startswith(("SELECT", "WITH"))]
             self.assertEqual(len(results), 25)
             self.assertLessEqual(len(select_statements), 12)
+
+    def test_public_methodology_proxy_uses_three_fiscal_years_and_payout(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.executescript(
+            """
+            CREATE TABLE security_master (instrument_id TEXT, ticker TEXT, name TEXT, asset_type TEXT);
+            CREATE TABLE market_daily_prices (run_id TEXT, instrument_id TEXT, trade_date TEXT, close REAL, validation_status TEXT);
+            CREATE TABLE stock_dividend_events (
+                run_id TEXT, version_id TEXT, dividend_event_id TEXT, instrument_id TEXT,
+                profit_period_label TEXT, distribution_type TEXT, status TEXT,
+                cash_dps_cny REAL, published_at_date TEXT, ex_date TEXT, observed_at TEXT
+            );
+            CREATE TABLE financial_observations (
+                run_id TEXT, instrument_id TEXT, metric TEXT, value REAL, report_date TEXT,
+                published_at_date TEXT, updated_at_date TEXT, observed_at TEXT
+            );
+            CREATE TABLE price_daily (
+                run_id TEXT, instrument_id TEXT, trade_date TEXT, adjustment TEXT,
+                source_id TEXT, observed_at TEXT, close REAL, turnover_cny REAL
+            );
+            INSERT INTO security_master VALUES ('CN.XSHG.600001', '600001.SH', '合成连续分红', 'stock');
+            INSERT INTO market_daily_prices VALUES ('p', 'CN.XSHG.600001', '2026-08-07', 10, 'approved');
+            """
+        )
+        for year in (2023, 2024, 2025):
+            connection.execute(
+                "INSERT INTO stock_dividend_events VALUES (?, ?, ?, 'CN.XSHG.600001', ?, '年度现金分红', 'implemented', 0.5, ?, ?, ?)",
+                (f"d{year}", f"v{year}", f"e{year}", f"{year}年度", f"{year + 1}-03-01", f"{year + 1}-04-01", f"{year + 1}-03-01"),
+            )
+            connection.execute(
+                "INSERT INTO financial_observations VALUES (?, 'CN.XSHG.600001', 'BASIC_EPS', 1.0, ?, ?, NULL, ?)",
+                (f"f{year}", f"{year}-12-31", f"{year + 1}-03-01", f"{year + 1}-03-01"),
+            )
+            connection.execute(
+                "INSERT INTO price_daily VALUES (?, 'CN.XSHG.600001', ?, 'unadjusted', 'test', ?, 10, 30000000)",
+                (f"h{year}", f"{year}-12-29", f"{year}-12-29"),
+            )
+        rule = json.loads((PROJECT_ROOT / "rules" / "sse_dividend_quality_proxy_v1.json").read_text(encoding="utf-8"))
+        results = run_researched_stock_rule(connection, rule, "2026-08-10T10:45:50+00:00")
+        self.assertEqual(results[0]["state"], "资料足以研究")
+        self.assertEqual(results[0]["priority"], 1)
+        self.assertAlmostEqual(results[0]["payload"]["average_dividend_yield_3y"], 0.05)
+        self.assertEqual(results[0]["payload"]["annual_payout_ratios"], [0.5, 0.5, 0.5])
 
 
 if __name__ == "__main__":
