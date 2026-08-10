@@ -82,7 +82,11 @@ def dispatch(command: str, payload: dict[str, Any], runtime_root: Path, workbenc
     if command == "dashboard":
         return dashboard(runtime_root, workbench)
     if command == "run_strategy":
-        return run_strategy(payload["strategy_id"], runtime_root, workbench, payload.get("release_id"))
+        requested_release = payload.get("release_id")
+        if not requested_release:
+            raise ValueError("release_id is required for strategy runs")
+        _, manifest = resolve_release(runtime_root, str(requested_release))
+        return run_strategy(payload["strategy_id"], runtime_root, workbench, manifest["release_id"])
     if command == "candidates":
         return candidates(workbench, payload["strategy_run_id"])
     if command == "research_card":

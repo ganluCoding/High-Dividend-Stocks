@@ -26,6 +26,6 @@ type CoreResponse<T> = { ok: boolean; result?: T; error?: { code: string; messag
 export async function core<T>(command: string, payload: Record<string, unknown> = {}): Promise<T> {
   const raw = await invoke<string>("invoke_core", { command, payloadJson: JSON.stringify(payload) });
   const response = JSON.parse(raw) as CoreResponse<T>;
-  if (!response.ok || !response.result) throw new Error(response.error?.message ?? "本地研究内核未返回结果");
+  if (!response.ok || response.result === undefined) throw new Error(response.error?.message ?? "本地研究内核未返回结果");
   return response.result;
 }

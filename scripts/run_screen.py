@@ -37,39 +37,75 @@ def initialize_workbench(path: Path) -> None:
         connection.commit()
 
 
-def coverage_is_complete(connection: sqlite3.Connection, instrument_id: str, datasets: list[str]) -> bool:
+def coverage_is_complete(connection: sqlite3.Connection, instrument_id: str, datasets: list[str], available_cutoff: str) -> bool:
     rows = connection.execute(
-        "SELECT dataset, collection_status, verification_status, completeness_ratio FROM coverage_matrix WHERE instrument_id=?",
+        """SELECT dataset, collection_status, verification_status, completeness_ratio,
+                  latest_available_date
+           FROM coverage_matrix WHERE instrument_id=?""",
         (instrument_id,),
     ).fetchall()
     by_dataset = {row[0]: row[1:] for row in rows}
-    return all(dataset in by_dataset and by_dataset[dataset][0] == "collected" and by_dataset[dataset][1] == "approved" and by_dataset[dataset][2] >= 1.0 for dataset in datasets)
+    return all(
+        dataset in by_dataset
+        and by_dataset[dataset][0] == "collected"
+        and by_dataset[dataset][1] == "approved"
+        and by_dataset[dataset][2] >= 1.0
+        for dataset in datasets
+    )
 
 
-def stock_metrics(connection: sqlite3.Connection, instrument_id: str, price_date: str) -> tuple[int, float | None, float | None]:
+def latest_price(connection: sqlite3.Connection, instrument_id: str, cutoff_date: str) -> tuple[str, float] | None:
+    row = connection.execute(
+        """SELECT trade_date, close
+           FROM market_daily_prices
+           WHERE instrument_id=? AND validation_status='approved' AND trade_date<=?
+           ORDER BY trade_date DESC, run_id DESC LIMIT 1""",
+        (instrument_id, cutoff_date),
+    ).fetchone()
+    return None if row is None else (str(row[0]), float(row[1]))
+
+
+def stock_metrics(connection: sqlite3.Connection, instrument_id: str, price_date: str, available_cutoff: str) -> tuple[int, float | None, float | None]:
+    cutoff_date = available_cutoff[:10]
+    canonical_events = """
+        WITH ranked_events AS (
+            SELECT d.*,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY d.dividend_event_id
+                       ORDER BY CASE WHEN d.status='implemented' THEN 1 ELSE 0 END DESC,
+                                COALESCE(d.observed_at, '') DESC,
+                                d.run_id DESC,
+                                d.version_id DESC
+                   ) AS rn
+            FROM stock_dividend_events AS d
+        )
+    """
     years, ordinary_cash, all_cash = connection.execute(
-        """SELECT COUNT(DISTINCT substr(ex_date, 1, 4)),
+        canonical_events + """SELECT COUNT(DISTINCT substr(ex_date, 1, 4)),
                   SUM(CASE WHEN distribution_type NOT IN ('特别分红', '股改分红') THEN COALESCE(cash_dps_cny, 0) ELSE 0 END),
                   SUM(COALESCE(cash_dps_cny, 0))
-           FROM stock_dividend_events
-           WHERE instrument_id=? AND status='implemented' AND ex_date IS NOT NULL
-             AND ex_date > date(?, '-12 months') AND ex_date <= ?""",
-        (instrument_id, price_date, price_date),
+           FROM ranked_events
+           WHERE rn=1 AND instrument_id=? AND status='implemented' AND ex_date IS NOT NULL
+             AND ex_date > date(?, '-12 months') AND ex_date <= ?
+             AND COALESCE(published_at_date, substr(observed_at, 1, 10), '9999-12-31') <= ?""",
+        (instrument_id, price_date, price_date, cutoff_date),
     ).fetchone()
     history_years = connection.execute(
-        "SELECT COUNT(DISTINCT substr(ex_date, 1, 4)) FROM stock_dividend_events WHERE instrument_id=? AND status='implemented' AND ex_date IS NOT NULL",
-        (instrument_id,),
+        canonical_events + """SELECT COUNT(DISTINCT substr(ex_date, 1, 4))
+           FROM ranked_events
+           WHERE rn=1 AND instrument_id=? AND status='implemented' AND ex_date IS NOT NULL
+             AND ex_date <= ?
+             AND COALESCE(published_at_date, substr(observed_at, 1, 10), '9999-12-31') <= ?""",
+        (instrument_id, price_date, cutoff_date),
     ).fetchone()[0]
-    price = connection.execute(
-        "SELECT close FROM v_latest_market_eod_price WHERE instrument_id=?", (instrument_id,)
-    ).fetchone()
-    close = None if price is None else float(price[0])
+    price = latest_price(connection, instrument_id, cutoff_date)
+    close = None if price is None else price[1]
     ordinary_yield = None if not close or not ordinary_cash else float(ordinary_cash) / close
     all_yield = None if not close or not all_cash else float(all_cash) / close
     return int(history_years), ordinary_yield, all_yield
 
 
-def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]], available_cutoff: str) -> list[dict[str, Any]]:
     params = rule["required_parameters"]
     results: list[dict[str, Any]] = []
     instruments = connection.execute("SELECT instrument_id, ticker, name FROM security_master WHERE asset_type='stock' ORDER BY instrument_id").fetchall()
@@ -81,22 +117,22 @@ def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonom
             reasons.append("MISSING_TAXONOMY")
         elif profile.get("dividend_style") in params["excluded_dividend_styles"]:
             state, reasons = "不纳入本模板", ["CYCLE_EXCLUDED"]
-        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"]):
+        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"], available_cutoff):
             reasons.append("MISSING_COVERAGE")
         else:
-            price_row = connection.execute("SELECT trade_date FROM v_latest_market_eod_price WHERE instrument_id=?", (instrument_id,)).fetchone()
+            price_row = latest_price(connection, instrument_id, available_cutoff[:10])
             if price_row is None:
                 reasons.append("MISSING_COVERAGE")
             else:
-                history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0])
+                history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0], available_cutoff)
                 if history_years < params["minimum_ordinary_dividend_years"]:
                     reasons.append("DIVIDEND_HISTORY_SHORT")
                 elif ordinary_yield is None or ordinary_yield < params["minimum_ordinary_ttm_cash_yield"]:
                     reasons.append("ORDINARY_YIELD_BELOW_ENTRY")
                 else:
                     state, reasons = "资料足以研究", ["PASS"]
-        price_row = connection.execute("SELECT trade_date, close FROM v_latest_market_eod_price WHERE instrument_id=?", (instrument_id,)).fetchone()
-        history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0]) if price_row else (0, None, None)
+        price_row = latest_price(connection, instrument_id, available_cutoff[:10])
+        history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0], available_cutoff) if price_row else (0, None, None)
         priority = 0 if state == "资料足以研究" else None
         results.append({"instrument_id": instrument_id, "state": state, "reasons": reasons, "priority": priority, "payload": {
             "ticker": ticker, "name": name, "price_date": None if price_row is None else price_row[0],
@@ -107,13 +143,13 @@ def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonom
     return results
 
 
-def run_etf_rule(connection: sqlite3.Connection, rule: dict[str, Any]) -> list[dict[str, Any]]:
+def run_etf_rule(connection: sqlite3.Connection, rule: dict[str, Any], available_cutoff: str) -> list[dict[str, Any]]:
     params = rule["required_parameters"]
     results: list[dict[str, Any]] = []
     instruments = connection.execute("SELECT instrument_id, ticker, name FROM security_master WHERE asset_type='etf' ORDER BY instrument_id").fetchall()
     for instrument_id, ticker, name in instruments:
         state, reasons = "资料不足", []
-        if not coverage_is_complete(connection, instrument_id, params["required_datasets"]):
+        if not coverage_is_complete(connection, instrument_id, params["required_datasets"], available_cutoff):
             reasons.append("MISSING_PRODUCT_FACTS" if params["require_product_facts"] else "MISSING_COVERAGE")
         results.append({"instrument_id": instrument_id, "state": state, "reasons": reasons, "priority": None, "payload": {
             "ticker": ticker, "name": name,
@@ -122,7 +158,7 @@ def run_etf_rule(connection: sqlite3.Connection, rule: dict[str, Any]) -> list[d
     return results
 
 
-def run_cyclical_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def run_cyclical_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]], available_cutoff: str) -> list[dict[str, Any]]:
     params = rule["required_parameters"]
     results: list[dict[str, Any]] = []
     instruments = connection.execute("SELECT instrument_id, ticker, name FROM security_master WHERE asset_type='stock' ORDER BY instrument_id").fetchall()
@@ -132,11 +168,11 @@ def run_cyclical_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxo
             state, reasons = "资料不足", ["MISSING_TAXONOMY"]
         elif profile.get("dividend_style") not in params["included_dividend_styles"]:
             state, reasons = "不纳入本模板", ["NOT_CYCLICAL"]
-        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"]):
+        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"], available_cutoff):
             state, reasons = "资料不足", ["MISSING_COVERAGE"]
         else:
             state, reasons = "继续观察", ["WATCH"]
-        price_row = connection.execute("SELECT trade_date, close FROM v_latest_market_eod_price WHERE instrument_id=?", (instrument_id,)).fetchone()
+        price_row = latest_price(connection, instrument_id, available_cutoff[:10])
         results.append({"instrument_id": instrument_id, "state": state, "reasons": reasons, "priority": None, "payload": {
             "ticker": ticker, "name": name, "price_date": None if price_row is None else price_row[0],
             "reference_close_cny": None if price_row is None else price_row[1], "taxonomy": profile,
@@ -164,11 +200,11 @@ def main() -> int:
     taxonomy = load_taxonomy(args.taxonomy)
     with sqlite3.connect(f"file:{facts}?mode=ro", uri=True) as facts_connection:
         if rule["rule_id"] == "stable_dividend_stock":
-            results = run_stock_rule(facts_connection, rule, taxonomy)
+            results = run_stock_rule(facts_connection, rule, taxonomy, manifest["available_cutoff"])
         elif rule["rule_id"] == "dividend_etf":
-            results = run_etf_rule(facts_connection, rule)
+            results = run_etf_rule(facts_connection, rule, manifest["available_cutoff"])
         elif rule["rule_id"] == "cyclical_dividend_watch":
-            results = run_cyclical_rule(facts_connection, rule, taxonomy)
+            results = run_cyclical_rule(facts_connection, rule, taxonomy, manifest["available_cutoff"])
         else:
             raise SystemExit(f"Unsupported rule id: {rule['rule_id']}")
     rule_hash = sha256_file(args.rule)

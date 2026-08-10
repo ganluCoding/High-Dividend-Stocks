@@ -79,6 +79,36 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             self.assertEqual(state, "资料足以研究")
             self.assertEqual(json.loads(reasons), ["PASS"])
 
+    def test_duplicate_logical_dividend_is_published_once_and_counted_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, runtime, workbench = root / "source.sqlite", root / "runtime", root / "workbench.sqlite"
+            taxonomy = root / "taxonomy.json"
+            create_source_database(source)
+            with sqlite3.connect(source) as connection:
+                connection.execute(
+                    "INSERT INTO stock_dividend_events VALUES (?, ?, ?, NULL, 'CN.XSHG.600001', ?, '年度分红', 1, 'implemented', 5, 0.5, ?, NULL, ?, NULL, NULL, 'test', NULL, ?)",
+                    ("duplicate-run", "v-2026", "event-2026", "2026", "2026-03-01", "2026-04-01", "2026-03-01"),
+                )
+                connection.execute(
+                    "INSERT INTO stock_dividend_events VALUES (?, ?, ?, NULL, 'CN.XSHG.600001', ?, '年度分红', 1, 'implemented', 7, 0.7, ?, NULL, ?, NULL, NULL, 'test', NULL, ?)",
+                    ("future-disclosure", "v-future", "event-future", "2026", "2026-08-08", "2026-04-02", "2026-08-08"),
+                )
+                connection.commit()
+            taxonomy.write_text(json.dumps({"instruments": [{"instrument_id": "CN.XSHG.600001", "dividend_style": "质量分红", "category": "普通工商"}]}, ensure_ascii=False), encoding="utf-8")
+            self.publish(source, runtime)
+            facts = runtime / "releases" / "release-test" / "facts.sqlite"
+            with sqlite3.connect(facts) as connection:
+                physical_rows = connection.execute("SELECT COUNT(*) FROM stock_dividend_events WHERE dividend_event_id='event-2026'").fetchone()[0]
+            self.assertEqual(physical_rows, 1)
+            subprocess.run(
+                [sys.executable, str(SCRIPTS / "run_screen.py"), "--runtime-root", str(runtime), "--workbench", str(workbench), "--taxonomy", str(taxonomy), "--rule", str(PROJECT_ROOT / "rules" / "stable_dividend_stock_v1.json")],
+                cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
+            )
+            with sqlite3.connect(workbench) as connection:
+                payload = connection.execute("SELECT payload_json FROM screen_results_v1").fetchone()[0]
+            self.assertAlmostEqual(json.loads(payload)["ordinary_ttm_cash_yield_pre_tax"], 0.05)
+
     def test_strategy_run_and_desktop_core_bind_the_release(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -98,6 +128,17 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             dashboard = json.loads(core.stdout)
             self.assertTrue(dashboard["ok"])
             self.assertEqual(dashboard["result"]["release"]["release_id"], "release-strategy")
+            missing_release = subprocess.run(
+                [sys.executable, str(SCRIPTS / "desktop_core.py"), "--command", "run_strategy", "--runtime-root", str(runtime), "--workbench", str(workbench), "--payload", json.dumps({"strategy_id": "stable_dividend_stock_research"})],
+                cwd=PROJECT_ROOT, capture_output=True, text=True,
+            )
+            self.assertNotEqual(missing_release.returncode, 0)
+            self.assertIn("release_id is required", missing_release.stdout)
+            pinned = subprocess.run(
+                [sys.executable, str(SCRIPTS / "desktop_core.py"), "--command", "run_strategy", "--runtime-root", str(runtime), "--workbench", str(workbench), "--payload", json.dumps({"strategy_id": "stable_dividend_stock_research", "release_id": "release-strategy"})],
+                cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
+            )
+            self.assertEqual(json.loads(pinned.stdout)["result"]["release_id"], "release-strategy")
 
 
 if __name__ == "__main__":

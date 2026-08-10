@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Candidate, core, Dashboard, Strategy, StrategyRun } from "./core";
+import { Candidate, core, Coverage, Dashboard, Strategy, StrategyRun } from "./core";
 
 type Page = "home" | "research" | "strategies" | "draft" | "method";
 
@@ -8,11 +8,13 @@ function formatDate(value?: string) {
   return value.replace("T", " ").replace("+00:00", "");
 }
 
-function metric(candidate: Candidate) {
+function metric(candidate: Candidate, lane?: Strategy["lane"]) {
+  if (lane === "cyclical") return "仅观察，不计算收益率";
+  if (lane === "etf") return "ETF资料待补齐";
   const payload = candidate.payload;
   const stockYield = payload.ordinary_ttm_cash_yield_pre_tax;
-  if (typeof stockYield === "number") return `${(stockYield * 100).toFixed(2)}%`;
-  return candidate.payload.boundary ? "按规则查看" : "未计算";
+  if (typeof stockYield === "number") return `TTM已实施税前历史 ${(stockYield * 100).toFixed(2)}%`;
+  return "历史现金口径待补齐";
 }
 
 export default function App() {
@@ -45,7 +47,8 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const result = await core<StrategyRun>("run_strategy", { strategy_id: strategy.strategy_id });
+      if (!dashboard) throw new Error("尚未固定当前发布版本，请先刷新首页");
+      const result = await core<StrategyRun>("run_strategy", { strategy_id: strategy.strategy_id, release_id: dashboard.release.release_id });
       setRun(result);
       const resultList = await core<{ candidates: Candidate[] }>("candidates", { strategy_run_id: result.strategy_run_id });
       setCandidates(resultList.candidates);
@@ -56,7 +59,11 @@ export default function App() {
     }
   };
 
-  const visibleCandidates = useMemo(() => candidates.filter((item) => item.research_state !== "资料不足"), [candidates]);
+  const visibleCandidates = useMemo(() => candidates.filter((item) => {
+    if (item.research_state === "资料不足" || item.research_state === "不纳入本模板") return false;
+    if (activeStrategy?.lane === "cyclical") return item.research_state === "继续观察";
+    return item.research_state === "资料足以研究";
+  }), [activeStrategy, candidates]);
 
   const saveWatch = async () => {
     if (!selected || !run) return;
@@ -99,7 +106,7 @@ function Home({ dashboard, busy, onRefresh, onStrategy, onStrategies }: { dashbo
   const stableCount = dashboard?.latest_runs[stable?.strategy_id ?? ""] ? "已运行" : "等待运行";
   return <section className="page home-page">
     <div className="hero"><div><p className="eyebrow">今天看什么</p><h1>先看清楚，<em>再决定。</em></h1><p className="hero-copy">这是你的本地高股息研究台。先从资料完整的企业开始，ETF 和周期标的分别看，不把一个历史收益率当成答案。</p></div><div className="hero-orb">200k<span>研究本金基准</span></div></div>
-    {dashboard ? <div className="release-strip"><span className="status-dot" />事实已发布 <strong>{dashboard.release.release_id}</strong><span>数据截止 {formatDate(dashboard.release.available_cutoff)}</span><button onClick={onRefresh}>刷新</button></div> : <div className="release-strip warning"><span className="status-dot" />正在读取本机事实发布包… <button onClick={onRefresh}>重试</button></div>}
+    {dashboard ? <div className="release-strip"><span className="status-dot" />事实已发布 <strong>{dashboard.release.release_id}</strong><span>发布可用时间 {formatDate(dashboard.release.available_cutoff)}</span><span>{coverageSummary(dashboard.release.coverage)}</span><button onClick={onRefresh}>刷新</button></div> : <div className="release-strip warning"><span className="status-dot" />正在读取本机事实发布包… <button onClick={onRefresh}>重试</button></div>}
     <div className="section-heading"><div><p className="eyebrow">研究入口</p><h2>从一个方向开始</h2></div><button className="text-button" onClick={onStrategies}>查看策略库 →</button></div>
     <div className="strategy-grid">
       {stable && <button className="strategy-card featured" onClick={() => onStrategy(stable)}><div className="card-label">建议从这里开始</div><div className="strategy-icon green">稳</div><h3>{stable.name}</h3><p>{stable.purpose}</p><span className="card-link">{stableCount} · 打开研究清单 →</span></button>}
@@ -115,7 +122,15 @@ function StrategyLibrary({ strategies, onOpen }: { strategies: Strategy[]; onOpe
 }
 
 function ResearchPage({ strategy, run, candidates, busy, selected, onSelect, onWatch, onBack }: { strategy: Strategy | null; run: StrategyRun | null; candidates: Candidate[]; busy: boolean; selected: Candidate | null; onSelect: (candidate: Candidate | null) => void; onWatch: () => void; onBack: () => void }) {
-  return <section className="page research-page"><button className="back-link" onClick={onBack}>← 策略库</button><div className="page-heading"><div><p className="eyebrow">候选与解释</p><h1>{strategy?.name ?? "选择一个研究方式"}</h1><p className="lead">符合研究条件，不等于买入建议。列表按资料状态排序，不按收益率推荐。</p></div>{run && <div className="run-badge">运行 {run.strategy_run_id}<small>{Object.entries(run.screen.states).map(([key, value]) => `${key} ${value}`).join(" · ")}</small></div>}</div>{busy && <div className="loading">正在读取固定发布版本…</div>}{!busy && candidates.length === 0 && <div className="empty-state">当前发布包暂无资料足以研究的标的。<br /><small>请查看数据覆盖，或等待低频事实补齐。</small></div>}<div className="candidate-layout"><div className="candidate-list">{candidates.map((candidate) => <button className={`candidate-row ${candidate.research_state === "资料足以研究" ? "qualified" : "watch"}`} key={candidate.instrument_id} onClick={() => onSelect(candidate)}><div className="candidate-main"><strong>{String(candidate.payload.name ?? candidate.instrument_id)}</strong><small>{String(candidate.payload.ticker ?? "")} · {candidate.research_state}</small></div><div className="candidate-metric"><strong>{metric(candidate)}</strong><small>{candidate.payload.price_date ? `收盘价 ${candidate.payload.price_date}` : "价格未知"}</small></div><span className="arrow">→</span></button>)}</div>{selected && <aside className="research-drawer"><button className="drawer-close" onClick={() => onSelect(null)}>×</button><p className="eyebrow">研究卡</p><h2>{String(selected.payload.name ?? selected.instrument_id)}</h2><span className={`state-pill ${selected.research_state === "资料足以研究" ? "green-pill" : "yellow-pill"}`}>{selected.research_state}</span><div className="fact-block"><label>历史现金口径</label><p>{String(selected.payload.boundary ?? "已实施现金分配历史参考")}</p></div><div className="fact-block"><label>为什么在这里</label><p>{selected.reason_codes.join("、")}</p></div><div className="fact-block"><label>还需要回答</label><p>尚未进行估值判断；请在下一次年报或分红公告后复核。</p></div><button className="primary-button" onClick={onWatch}>加入我的观察</button></aside>}</div></section>;
+  const emptyLabel = strategy?.lane === "cyclical" ? "当前没有可观察的周期标的。" : "当前发布包暂无资料足以研究的标的。";
+  return <section className="page research-page"><button className="back-link" onClick={onBack}>← 策略库</button><div className="page-heading"><div><p className="eyebrow">候选与解释</p><h1>{strategy?.name ?? "选择一个研究方式"}</h1><p className="lead">符合研究条件，不等于买入建议。列表按资料状态排序，不按收益率推荐。</p></div>{run && <div className="run-badge">运行 {run.strategy_run_id}<small>{Object.entries(run.screen.states).map(([key, value]) => `${key} ${value}`).join(" · ")}</small></div>}</div>{busy && <div className="loading">正在读取固定发布版本…</div>}{!busy && candidates.length === 0 && <div className="empty-state">{emptyLabel}<br /><small>请查看数据覆盖，或等待低频事实补齐。</small></div>}<div className="candidate-layout"><div className="candidate-list">{candidates.map((candidate) => <button className={`candidate-row ${candidate.research_state === "资料足以研究" ? "qualified" : "watch"}`} key={candidate.instrument_id} onClick={() => onSelect(candidate)}><div className="candidate-main"><strong>{String(candidate.payload.name ?? candidate.instrument_id)}</strong><small>{String(candidate.payload.ticker ?? "")} · {candidate.research_state}</small></div><div className="candidate-metric"><strong>{metric(candidate, strategy?.lane)}</strong><small>{candidate.payload.price_date ? `收盘价 ${candidate.payload.price_date}` : "价格未知"}</small></div><span className="arrow">→</span></button>)}</div>{selected && <aside className="research-drawer"><button className="drawer-close" onClick={() => onSelect(null)}>×</button><p className="eyebrow">研究卡</p><h2>{String(selected.payload.name ?? selected.instrument_id)}</h2><span className={`state-pill ${selected.research_state === "资料足以研究" ? "green-pill" : "yellow-pill"}`}>{selected.research_state}</span><div className="fact-block"><label>历史现金口径</label><p>{String(selected.payload.boundary ?? "已实施现金分配历史参考")}</p></div><div className="fact-block"><label>为什么在这里</label><p>{selected.reason_codes.join("、")}</p></div><div className="fact-block"><label>还需要回答</label><p>尚未进行估值判断；请在下一次年报或分红公告后复核。</p></div><button className="primary-button" onClick={onWatch}>加入我的观察</button></aside>}</div></section>;
+}
+
+function coverageSummary(coverage: Coverage[]) {
+  const prices = coverage.filter((item) => item.dataset === "market_prices").reduce((sum, item) => sum + item.collected, 0);
+  const stocks = coverage.find((item) => item.dataset === "stock_dividends");
+  const etfFacts = coverage.find((item) => item.dataset === "etf_product_facts");
+  return `价格 ${prices.toLocaleString()}/${coverage.filter((item) => item.dataset === "market_prices").reduce((sum, item) => sum + item.instruments, 0).toLocaleString()} · 股票分红 ${stocks?.collected ?? 0}/${stocks?.instruments ?? 0} · ETF产品 ${etfFacts?.collected ?? 0}/${etfFacts?.instruments ?? 0}`;
 }
 
 function DraftPage() {
