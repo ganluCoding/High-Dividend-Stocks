@@ -82,13 +82,15 @@ def collect_baostock_financials(instruments: list[dict[str, Any]], year: int, qu
     try:
         for instrument in instruments:
             bs_code = f"{instrument['provider_symbol'][:2].lower()}.{instrument['code']}"
-            found = False
+            completed = True
             for statement_type, metric_map in metric_specs.items():
                 try:
                     function = getattr(bs, f"query_{statement_type}_data")
                     query = function(code=bs_code, year=year, quarter=quarter)
                     if query.error_code != "0":
-                        continue
+                        failures.append({"source": "baostock_financial", "symbol": instrument["code"], "dataset": statement_type, "message": f"provider error {query.error_code}: {query.error_msg}"})
+                        completed = False
+                        break
                     responded.add(instrument["code"])
                     if not query.next():
                         continue
@@ -113,12 +115,15 @@ def collect_baostock_financials(instruments: list[dict[str, Any]], year: int, qu
                             "source_raw_sha256": None,
                             "observed_at": None,
                         })
-                        found = True
                 except Exception as exc:  # noqa: BLE001
                     failures.append({"source": "baostock_financial", "symbol": instrument["code"], "dataset": statement_type, "message": f"{type(exc).__name__}: {exc}"})
-            # A successful empty statement is normal for some newly listed or
-            # reorganized companies; source health measures responses, not the
-            # presence of every optional financial field.
+                    completed = False
+                    break
+            if completed:
+                # A successful empty statement is normal for some newly listed
+                # or reorganized companies.  Source health measures successful
+                # provider responses, not the presence of every optional fact.
+                responded.add(instrument["code"])
     finally:
         bs.logout()
     return records, responded, failures
