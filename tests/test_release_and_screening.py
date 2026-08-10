@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = PROJECT_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 from release_protocol import resolve_release, validate_release  # noqa: E402
+from run_screen import run_stock_rule  # noqa: E402
 
 
 def create_source_database(path: Path) -> None:
@@ -145,6 +146,36 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             with sqlite3.connect(workbench) as connection:
                 artifact_types = {row[0] for row in connection.execute("SELECT DISTINCT artifact_type FROM immutable_artifacts_v1")}
             self.assertIn("strategy", artifact_types)
+
+    def test_stock_rule_does_not_issue_per_instrument_metric_queries(self) -> None:
+        """The full-market stable screen must batch its read-side SQL work."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, runtime = root / "source.sqlite", root / "runtime"
+            create_source_database(source)
+            with sqlite3.connect(source) as connection:
+                for index in range(24):
+                    instrument_id = f"CN.XSHG.{600100 + index:06d}"
+                    ticker = f"{600100 + index:06d}.SH"
+                    connection.execute(
+                        "INSERT INTO security_master VALUES (?, ?, ?, 'stock', 'SH', 'active', 'test', '2023-01-01', '2026-08-07', 'market-run')",
+                        (instrument_id, ticker, f"合成扩展股{index}"),
+                    )
+                    connection.execute(
+                        "INSERT INTO market_daily_prices VALUES (?, ?, '2026-08-07', 'test', 10, 10, 10, 10, 1, 1, 'approved')",
+                        (f"market-run-{index}", instrument_id),
+                    )
+                connection.commit()
+            self.publish(source, runtime)
+            facts = runtime / "releases" / "release-test" / "facts.sqlite"
+            rule = json.loads((PROJECT_ROOT / "rules" / "stable_dividend_stock_v1.json").read_text(encoding="utf-8"))
+            with sqlite3.connect(facts) as connection:
+                statements: list[str] = []
+                connection.set_trace_callback(statements.append)
+                results = run_stock_rule(connection, rule, {}, "2026-08-07T15:00:00+08:00")
+            select_statements = [statement for statement in statements if statement.lstrip().upper().startswith(("SELECT", "WITH"))]
+            self.assertEqual(len(results), 25)
+            self.assertLessEqual(len(select_statements), 12)
 
 
 if __name__ == "__main__":

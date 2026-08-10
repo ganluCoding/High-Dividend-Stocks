@@ -78,6 +78,112 @@ def latest_price(connection: sqlite3.Connection, instrument_id: str, cutoff_date
     return None if row is None else (str(row[0]), float(row[1]))
 
 
+def load_coverage_matrix(connection: sqlite3.Connection) -> dict[str, dict[str, tuple[str, str, float]]]:
+    """Load coverage facts once for a full-market screen."""
+    rows = connection.execute(
+        """SELECT instrument_id, dataset, collection_status, verification_status, completeness_ratio
+           FROM coverage_matrix"""
+    ).fetchall()
+    coverage: dict[str, dict[str, tuple[str, str, float]]] = {}
+    for instrument_id, dataset, collection_status, verification_status, completeness_ratio in rows:
+        coverage.setdefault(str(instrument_id), {})[str(dataset)] = (
+            str(collection_status), str(verification_status), float(completeness_ratio),
+        )
+    return coverage
+
+
+def coverage_is_complete_from_map(
+    coverage: dict[str, dict[str, tuple[str, str, float]]], instrument_id: str, datasets: list[str]
+) -> bool:
+    by_dataset = coverage.get(instrument_id, {})
+    return all(
+        dataset in by_dataset
+        and by_dataset[dataset][0] == "collected"
+        and by_dataset[dataset][1] == "approved"
+        and by_dataset[dataset][2] >= 1.0
+        for dataset in datasets
+    )
+
+
+def load_latest_stock_metrics(
+    connection: sqlite3.Connection, cutoff_date: str, available_cutoff: str
+) -> dict[str, tuple[str, float, int, float | None, float | None]]:
+    """Batch latest prices and dividend metrics for all stocks in one read."""
+    canonical_events = """
+        ranked_events AS (
+            SELECT d.*,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY d.dividend_event_id
+                       ORDER BY CASE WHEN d.status='implemented' THEN 1 ELSE 0 END DESC,
+                                COALESCE(d.observed_at, '') DESC,
+                                d.run_id DESC,
+                                d.version_id DESC
+                   ) AS rn
+            FROM stock_dividend_events AS d
+        ),
+        eligible_events AS (
+            SELECT instrument_id, distribution_type, cash_dps_cny, ex_date
+            FROM ranked_events
+            WHERE rn=1 AND status='implemented' AND ex_date IS NOT NULL
+              AND COALESCE(published_at_date, substr(observed_at, 1, 10), '9999-12-31') <= ?
+        )
+    """
+    rows = connection.execute(
+        """WITH ranked_prices AS (
+                   SELECT instrument_id, trade_date, close,
+                          ROW_NUMBER() OVER (
+                              PARTITION BY instrument_id
+                              ORDER BY trade_date DESC, run_id DESC
+                          ) AS rn
+                   FROM market_daily_prices
+                   WHERE validation_status='approved' AND trade_date<=?
+               ),
+               latest_prices AS (
+                   SELECT instrument_id, trade_date, close
+                   FROM ranked_prices
+                   WHERE rn=1
+               ),
+               """ + canonical_events + """
+               ,metrics AS (
+                   SELECT p.instrument_id, p.trade_date, p.close,
+                          COUNT(DISTINCT CASE
+                              WHEN e.ex_date <= p.trade_date
+                              THEN substr(e.ex_date, 1, 4)
+                          END) AS history_years,
+                          SUM(CASE
+                              WHEN e.ex_date > date(p.trade_date, '-12 months')
+                               AND e.ex_date <= p.trade_date
+                               AND e.distribution_type NOT IN ('特别分红', '股改分红')
+                              THEN COALESCE(e.cash_dps_cny, 0)
+                              ELSE 0
+                          END) AS ordinary_cash,
+                          SUM(CASE
+                              WHEN e.ex_date > date(p.trade_date, '-12 months')
+                               AND e.ex_date <= p.trade_date
+                              THEN COALESCE(e.cash_dps_cny, 0)
+                              ELSE 0
+                          END) AS all_cash
+                   FROM latest_prices AS p
+                   LEFT JOIN eligible_events AS e ON e.instrument_id=p.instrument_id
+                   GROUP BY p.instrument_id, p.trade_date, p.close
+               )
+               SELECT instrument_id, trade_date, close, history_years, ordinary_cash, all_cash
+               FROM metrics""",
+        (cutoff_date, available_cutoff[:10]),
+    ).fetchall()
+    values: dict[str, tuple[str, float, int, float | None, float | None]] = {}
+    for instrument_id, trade_date, close, history_years, ordinary_cash, all_cash in rows:
+        close_value = float(close)
+        values[str(instrument_id)] = (
+            str(trade_date),
+            close_value,
+            int(history_years or 0),
+            None if not close_value or not ordinary_cash else float(ordinary_cash) / close_value,
+            None if not close_value or not all_cash else float(all_cash) / close_value,
+        )
+    return values
+
+
 def stock_metrics(connection: sqlite3.Connection, instrument_id: str, price_date: str, available_cutoff: str) -> tuple[int, float | None, float | None]:
     cutoff_date = available_cutoff[:10]
     canonical_events = """
@@ -121,6 +227,8 @@ def stock_metrics(connection: sqlite3.Connection, instrument_id: str, price_date
 def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonomy: dict[str, dict[str, Any]], available_cutoff: str) -> list[dict[str, Any]]:
     params = rule["required_parameters"]
     results: list[dict[str, Any]] = []
+    coverage = load_coverage_matrix(connection)
+    stock_metrics_by_instrument = load_latest_stock_metrics(connection, available_cutoff[:10], available_cutoff)
     instruments = connection.execute("SELECT instrument_id, ticker, name FROM security_master WHERE asset_type='stock' ORDER BY instrument_id").fetchall()
     for instrument_id, ticker, name in instruments:
         reasons: list[str] = []
@@ -130,22 +238,27 @@ def run_stock_rule(connection: sqlite3.Connection, rule: dict[str, Any], taxonom
             reasons.append("MISSING_TAXONOMY")
         elif profile.get("dividend_style") in params["excluded_dividend_styles"]:
             state, reasons = "不纳入本模板", ["CYCLE_EXCLUDED"]
-        elif not coverage_is_complete(connection, instrument_id, params["required_datasets"], available_cutoff):
+        elif not coverage_is_complete_from_map(coverage, instrument_id, params["required_datasets"]):
             reasons.append("MISSING_COVERAGE")
         else:
-            price_row = latest_price(connection, instrument_id, available_cutoff[:10])
-            if price_row is None:
+            metric_row = stock_metrics_by_instrument.get(instrument_id)
+            if metric_row is None:
                 reasons.append("MISSING_COVERAGE")
             else:
-                history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0], available_cutoff)
+                _, _, history_years, ordinary_yield, _ = metric_row
                 if history_years < params["minimum_ordinary_dividend_years"]:
                     reasons.append("DIVIDEND_HISTORY_SHORT")
                 elif ordinary_yield is None or ordinary_yield < params["minimum_ordinary_ttm_cash_yield"]:
                     reasons.append("ORDINARY_YIELD_BELOW_ENTRY")
                 else:
                     state, reasons = "资料足以研究", ["PASS"]
-        price_row = latest_price(connection, instrument_id, available_cutoff[:10])
-        history_years, ordinary_yield, all_yield = stock_metrics(connection, instrument_id, price_row[0], available_cutoff) if price_row else (0, None, None)
+        metric_row = stock_metrics_by_instrument.get(instrument_id)
+        if metric_row is None:
+            price_row = None
+            history_years, ordinary_yield, all_yield = 0, None, None
+        else:
+            price_date, close, history_years, ordinary_yield, all_yield = metric_row
+            price_row = (price_date, close)
         priority = 0 if state == "资料足以研究" else None
         results.append({"instrument_id": instrument_id, "state": state, "reasons": reasons, "priority": priority, "payload": {
             "ticker": ticker, "name": name, "price_date": None if price_row is None else price_row[0],
