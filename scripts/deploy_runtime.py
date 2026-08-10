@@ -32,6 +32,8 @@ def main() -> int:
         "scripts/run_screen.py",
         "scripts/strategy_engine.py",
         "scripts/desktop_core.py",
+        "scripts/collect_price_history.py",
+        "scripts/autonomous_history_backfill.py",
         "scripts/install_release_publisher_agent.py",
         "scripts/collect_spike_data.py",
         "config/autonomous_update.json",

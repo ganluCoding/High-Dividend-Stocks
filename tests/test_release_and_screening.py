@@ -24,6 +24,7 @@ def create_source_database(path: Path) -> None:
             """
             CREATE TABLE security_master (instrument_id TEXT PRIMARY KEY, ticker TEXT, name TEXT, asset_type TEXT, exchange TEXT, listing_status TEXT, source_id TEXT, first_seen_at TEXT, last_seen_at TEXT, last_seen_run_id TEXT);
             CREATE TABLE market_daily_prices (run_id TEXT, instrument_id TEXT, trade_date TEXT, source_id TEXT, close REAL, open REAL, high REAL, low REAL, volume REAL, turnover_cny REAL, validation_status TEXT);
+            CREATE TABLE price_daily (run_id TEXT, instrument_id TEXT, trade_date TEXT, adjustment TEXT, observed_at TEXT);
             CREATE TABLE stock_dividend_events (run_id TEXT, version_id TEXT, dividend_event_id TEXT, supersedes_version_id TEXT, instrument_id TEXT, profit_period_label TEXT, distribution_type TEXT, installment_no INTEGER, status TEXT, cash_per_10_shares_cny REAL, cash_dps_cny REAL, published_at_date TEXT, record_date TEXT, ex_date TEXT, payment_date TEXT, description TEXT, source_id TEXT, source_raw_sha256 TEXT, observed_at TEXT);
             CREATE TABLE etf_distribution_events (run_id TEXT, version_id TEXT, dividend_event_id TEXT, instrument_id TEXT, status TEXT, cash_per_unit_cny REAL, cumulative_distribution_cny REAL, ex_date TEXT, date_semantics TEXT, source_id TEXT, source_raw_sha256 TEXT, observed_at TEXT);
             CREATE TABLE financial_observations (run_id TEXT, instrument_id TEXT, statement_type TEXT, metric TEXT, value REAL, currency TEXT, report_date TEXT, published_at_date TEXT, updated_at_date TEXT, source_id TEXT, source_raw_sha256 TEXT, observed_at TEXT);
@@ -31,6 +32,7 @@ def create_source_database(path: Path) -> None:
         )
         connection.execute("INSERT INTO security_master VALUES ('CN.XSHG.600001', '600001.SH', '合成稳健股', 'stock', 'SH', 'active', 'test', '2023-01-01', '2026-08-07', 'market-run')")
         connection.execute("INSERT INTO market_daily_prices VALUES ('market-run', 'CN.XSHG.600001', '2026-08-07', 'test', 10, 10, 10, 10, 1, 1, 'approved')")
+        connection.execute("INSERT INTO price_daily VALUES ('history-run', 'CN.XSHG.600001', '2026-08-07', 'unadjusted', '2026-08-07T15:00:00+08:00')")
         for year in (2023, 2024, 2025, 2026):
             connection.execute(
                 "INSERT INTO stock_dividend_events VALUES (?, ?, ?, NULL, 'CN.XSHG.600001', ?, '年度分红', 1, 'implemented', 5, 0.5, ?, NULL, ?, NULL, NULL, 'test', NULL, ?)",

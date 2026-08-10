@@ -1,8 +1,8 @@
-# 本地自治数据更新设计 v2（已部署，2026-08-09验收）
+# 本地自治数据更新设计 v2（已部署，2026-08-10验收）
 
 ## 当前发布状态
 
-运行时数据库已部署到 `~/Library/Application Support/HighDividend/data/database/high_dividend.db`，并通过首版验收：5,422只股票、1,603只ETF的行情快照，31只核心股票分红、4只ETF分配、31只核心股票财务摘要均已写入已发布版本。候选配置仍包含5只核心ETF，缺失的低频事实会在覆盖矩阵中明确显示。工作区中的 `data/database/high_dividend.db` 仍是开发种子库；本机定时任务读取运行时数据库。
+运行时数据库已部署到 `~/Library/Application Support/HighDividend/data/database/high_dividend.db`。当前发布版本同时包含5,422只股票、1,603只ETF的行情快照，以及289个标的的历史日线（2019-01-02至2026-08-07）；31只核心股票分红、4只ETF分配、31只核心股票财务摘要也已写入已发布版本。候选配置仍包含5只核心ETF，缺失的低频事实会在覆盖矩阵中明确显示。工作区中的 `data/database/high_dividend.db` 仍是开发种子库；本机定时任务读取运行时数据库。
 
 日任务使用 BaoStock 全量证券清单、腾讯批量行情和 BaoStock 40只抽样复核；低频任务每周运行，使用 CNINFO 分红、Sina ETF 累计分配和 BaoStock 财务事实。便利源仅用于本机内部研究，未授权原始数据对外再分发。
 
@@ -24,7 +24,7 @@
   → high_dividend.db 全量重建
 ```
 
-优点是快照、来源和hash可追溯；上述缺口已由自治运行时补上。每日行情和每周低频任务都采用暂存、覆盖率/日期/跨源抽样门禁、事务发布、备份和失败隔离。
+优点是快照、来源和hash可追溯；上述缺口已由自治运行时补上。每日行情、每周低频任务和每日历史回填都采用暂存、覆盖率/日期/跨源抽样门禁、事务发布、备份和失败隔离。历史回填状态见 `docs/HISTORICAL-DATA-COLLECTION-STATUS.md`。
 
 ## 目标架构
 
@@ -62,6 +62,8 @@ launchd（本机用户任务，每小时唤醒检查）
 - API密钥（如后续选用付费数据源）仅放在macOS Keychain或受限环境变量，不进入代码、数据库、plist或日志。
 
 `scripts/deploy_runtime.py` 将运行时部署到 `~/Library/Application Support/HighDividend`，避开macOS对“文稿”目录的后台访问限制；`scripts/install_launchd_agent.py --install` 安装每日任务，`scripts/install_low_frequency_agent.py --install` 安装每周低频任务。运行时数据库才是本机服务的正式数据库。除非明确要重置运行时，不要使用 `--refresh-database`，以免用开发种子库覆盖已发布版本。
+
+历史行情另有用户级任务 `com.highdividend.historical-backfill`，每天运行一次，每批最多回填100只股票和50只ETF。它从历史日数不足约1,000个交易日的标的中继续取数，成功率达到80%才发布；手动安装命令为 `scripts/install_historical_backfill_agent.py --install`。该任务与每日收盘行情任务分开，避免长时间历史回填阻塞日行情更新。
 
 ## 数据源原则
 

@@ -74,6 +74,20 @@ def build_coverage(connection: sqlite3.Connection, release_id: str, available_cu
         "etf", 1,
     )
     add(
+        "price_history", "5y",
+        """SELECT s.instrument_id, MAX(p.trade_date), MAX(p.observed_at), COUNT(DISTINCT p.trade_date), json_group_array(DISTINCT p.run_id)
+           FROM security_master s LEFT JOIN price_daily p ON p.instrument_id=s.instrument_id AND p.adjustment='unadjusted'
+           WHERE s.asset_type=? GROUP BY s.instrument_id""",
+        "stock", 1250,
+    )
+    add(
+        "price_history", "5y",
+        """SELECT s.instrument_id, MAX(p.trade_date), MAX(p.observed_at), COUNT(DISTINCT p.trade_date), json_group_array(DISTINCT p.run_id)
+           FROM security_master s LEFT JOIN price_daily p ON p.instrument_id=s.instrument_id AND p.adjustment='unadjusted'
+           WHERE s.asset_type=? GROUP BY s.instrument_id""",
+        "etf", 1250,
+    )
+    add(
         "stock_dividends", "3y",
         """SELECT s.instrument_id, MAX(d.ex_date), MAX(COALESCE(d.published_at_date, d.observed_at)),
                   COUNT(DISTINCT substr(d.ex_date, 1, 4)), json_group_array(DISTINCT d.run_id)
