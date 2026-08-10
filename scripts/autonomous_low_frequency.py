@@ -14,6 +14,8 @@ import fcntl
 import json
 import re
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -386,7 +388,22 @@ def main() -> int:
         health = {"run_id": run_id, "status": "published" if passed else "quarantined", "as_of_date": args.as_of_date, "checks": [{"name": name, "passed": ok, "details": detail} for name, ok, detail in checks], "failures": failures, "backup": None if backup_path is None else str(backup_path.relative_to(PROJECT_ROOT))}
         write_health(health_path, health)
         print(json.dumps(health, ensure_ascii=False, indent=2))
-        return 0 if passed else 2
+        if not passed:
+            return 2
+        publisher = PROJECT_ROOT / "scripts" / "publish_release.py"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(publisher),
+                "--runtime-root", str(PROJECT_ROOT),
+                "--database", str(args.database),
+                "--release-id", f"release_{run_id}",
+                "--available-cutoff", f"{args.as_of_date}T15:00:00+08:00",
+            ],
+            text=True,
+            check=False,
+        )
+        return completed.returncode
     finally:
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
         lock.close()
