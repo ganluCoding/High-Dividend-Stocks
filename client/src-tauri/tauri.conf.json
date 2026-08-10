@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "高股息研究",
+  "version": "0.1.0",
+  "identifier": "com.ganlucoding.highdividend",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "高股息研究",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 960,
+        "minHeight": 650,
+        "resizable": true
+      }
+    ],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png",
+      "icons/icon.svg"
+    ],
+    "category": "Finance",
+    "shortDescription": "本机优先的中国高股息研究工具",
+    "longDescription": "读取本机不可变事实发布包，运行版本化研究策略，不连接券商、不自动交易。",
+    "resources": {
+      "../../scripts": "scripts",
+      "../../rules": "rules",
+      "../../strategies": "strategies",
+      "../../config": "config",
+      "../../database": "database"
+    }
+  }
+}

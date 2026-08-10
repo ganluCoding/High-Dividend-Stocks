@@ -1,0 +1,17 @@
+{
+  "rule_id": "cyclical_dividend_watch",
+  "rule_version": "1.0.0",
+  "scope": "a_share_cyclical_stock",
+  "status": "active",
+  "required_parameters": {
+    "included_dividend_styles": ["周期分红"],
+    "required_datasets": ["market_prices", "stock_dividends", "financials"]
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "MISSING_TAXONOMY": "缺少受控行业与分红风格分类",
+    "NOT_CYCLICAL": "不属于周期红利观察范围",
+    "MISSING_COVERAGE": "关键价格、分红或财务事实不足",
+    "WATCH": "周期性利润和静态收益率不能外推为未来分红；仅供观察与复核"
+  }
+}

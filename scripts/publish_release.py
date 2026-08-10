@@ -74,6 +74,20 @@ def build_coverage(connection: sqlite3.Connection, release_id: str, available_cu
         "etf", 1,
     )
     add(
+        "price_history", "5y",
+        """SELECT s.instrument_id, MAX(p.trade_date), MAX(p.observed_at), COUNT(DISTINCT p.trade_date), json_group_array(DISTINCT p.run_id)
+           FROM security_master s LEFT JOIN price_daily p ON p.instrument_id=s.instrument_id AND p.adjustment='unadjusted'
+           WHERE s.asset_type=? GROUP BY s.instrument_id""",
+        "stock", 1250,
+    )
+    add(
+        "price_history", "5y",
+        """SELECT s.instrument_id, MAX(p.trade_date), MAX(p.observed_at), COUNT(DISTINCT p.trade_date), json_group_array(DISTINCT p.run_id)
+           FROM security_master s LEFT JOIN price_daily p ON p.instrument_id=s.instrument_id AND p.adjustment='unadjusted'
+           WHERE s.asset_type=? GROUP BY s.instrument_id""",
+        "etf", 1250,
+    )
+    add(
         "stock_dividends", "3y",
         """SELECT s.instrument_id, MAX(d.ex_date), MAX(COALESCE(d.published_at_date, d.observed_at)),
                   COUNT(DISTINCT substr(d.ex_date, 1, 4)), json_group_array(DISTINCT d.run_id)
@@ -120,6 +134,36 @@ def build_coverage(connection: sqlite3.Connection, release_id: str, available_cu
         "SELECT dataset, COUNT(*), SUM(collection_status='collected'), AVG(completeness_ratio) FROM coverage_matrix GROUP BY dataset ORDER BY dataset"
     ).fetchall()
     return [{"dataset": row[0], "instruments": row[1], "collected": row[2], "average_completeness": round(row[3] or 0, 6)} for row in summaries]
+
+
+def deduplicate_event_versions(connection: sqlite3.Connection) -> None:
+    """Keep one physical row for each logical event version in a release.
+
+    The mutable collector database intentionally retains the run id for lineage,
+    so the same immutable ``version_id`` can be observed by several runs.  A
+    release is the query contract consumed by screening and must not count those
+    observations as separate cash events.  Distinct versions of the same event
+    are retained for later supersession handling; only exact version repeats are
+    collapsed, preferring the newest observation deterministically.
+    """
+    for table in ("stock_dividend_events", "etf_distribution_events"):
+        connection.execute(
+            f"""
+            DELETE FROM {table}
+            WHERE rowid IN (
+                SELECT rowid FROM (
+                    SELECT rowid,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY dividend_event_id, version_id
+                               ORDER BY COALESCE(observed_at, '') DESC, run_id DESC
+                           ) AS rn
+                    FROM {table}
+                )
+                WHERE rn > 1
+            )
+            """
+        )
+    connection.commit()
 
 
 def acquire_lock(runtime_root: Path):
@@ -171,6 +215,8 @@ def main() -> int:
         facts = temporary / "facts.sqlite"
         sqlite_backup(source, facts)
         apply(facts)
+        with sqlite3.connect(facts) as connection:
+            deduplicate_event_versions(connection)
         integrity_check(facts)
         with sqlite3.connect(facts) as connection:
             coverage = build_coverage(connection, release_id, available_cutoff)

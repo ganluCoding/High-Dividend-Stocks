@@ -1,0 +1,25 @@
+{
+  "rule_id": "sse_dividend_quality_proxy",
+  "rule_version": "1.0.0",
+  "scope": "a_share_current_snapshot_research",
+  "status": "active",
+  "required_parameters": {
+    "target_count": 50,
+    "dividend_years": 3,
+    "required_datasets": ["market_prices", "price_history", "stock_dividends", "financials"]
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "ST_EXCLUDED": "当前证券简称带 ST 或 *ST",
+    "DIVIDEND_NOT_CONTINUOUS": "最近三个完整财年未连续记录常规现金分红",
+    "MISSING_ANNUAL_EPS": "缺少最近三个完整财年的年度每股收益",
+    "MISSING_THREE_YEAR_PRICES": "缺少最近三个完整财年的年末价格",
+    "PAYOUT_OUTSIDE_RANGE": "三年平均或最新财年股利支付率不在 0 到 100% 之间",
+    "RANK_BELOW_CUTOFF": "三年平均历史股息率排名未进入前 50",
+    "PASS": "进入上证红利公开方法研究代理的前 50 个研究位置"
+  },
+  "methodology_sources": [
+    "https://www.sse.com.cn/market/sseindex/diclosure/c/c_20220327_5700336.shtml"
+  ],
+  "replication_status": "research_proxy_not_index_replication"
+}

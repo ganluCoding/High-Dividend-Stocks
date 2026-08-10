@@ -18,7 +18,8 @@ def sha256(path: Path) -> str:
 
 
 def apply(database: Path) -> list[str]:
-    with sqlite3.connect(database) as conn:
+    with sqlite3.connect(database, timeout=180) as conn:
+        conn.execute("PRAGMA busy_timeout=180000")
         conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL, file_sha256 TEXT NOT NULL)")
         applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
         completed: list[str] = []

@@ -9,9 +9,12 @@
 - 为价格、股票分红、财务、ETF 分配和 ETF 产品资料生成覆盖矩阵；
 - 将规则、筛选结果写入独立 `workbench.db`，并绑定发布版本和规则版本；
 - 提供稳健分红股票与红利 ETF 两个非推荐研究模板；
+- 提供稳健股票、红利 ETF、周期观察和三种公开指数方法研究代理，以及 Tauri + React 本地客户端 MVP；
+- 桌面安装包内置研究 Runtime 资源，启动时会预检并在缺少代码时自举到用户目录；
+- 运行记录保存策略、规则和 taxonomy 内容哈希，支持检查历史工件是否被替换；
 - 内置离线合成测试，不需要联网或提交真实数据。
 
-当前本地运行时可以包含全市场证券主表与日终价格，但低频事实覆盖会单独显示。项目故意不生成“全市场高股息排行榜”。
+当前本地运行时可以包含全市场证券主表与日终价格，但低频事实覆盖会单独显示。公开方法研究代理会生成可解释的研究截面，但项目不会把静态收益率直接包装成买入排行榜。
 
 ## 快速开始
 
@@ -43,6 +46,16 @@ python3 scripts/run_screen.py \
 python3 -m unittest discover -s tests -v
 python3 scripts/validate_golden_fixtures.py
 ```
+
+客户端和策略库说明见 [MVP 文档](docs/STRATEGY-CLIENT-MVP.md)；本轮全市场策略依据、匹配结果和限制见 [策略研究 v2](docs/STRATEGY-RESEARCH-v2.md)。
+
+启动桌面客户端（macOS）：
+
+```bash
+python3 scripts/launch_desktop_client.py --install
+```
+
+该命令会先检查本机 Runtime、当前事实发布包和桌面内核，再复制到 `~/Applications/高股息研究.app` 并打开。
 
 ## 结果边界
 

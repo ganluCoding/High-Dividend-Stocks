@@ -1,0 +1,11 @@
+{
+  "strategy_id": "dividend_etf_research",
+  "strategy_version": "1.0.0",
+  "name": "红利 ETF 分散研究",
+  "lane": "etf",
+  "rule_file": "dividend_etf_v1.json",
+  "purpose": "研究权益红利指数 ETF 的产品资料与实际现金分配，不构成买卖建议。",
+  "suitable_for": "希望比较指数分散、费用与产品机制的研究者。",
+  "excludes": "非权益红利 ETF、产品资料不足的基金及直接持股比较。",
+  "review_triggers": ["产品资料补齐", "基金公告", "价格重新确认"]
+}

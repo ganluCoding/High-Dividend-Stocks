@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Weekly/monthly low-frequency dividend and financial refresh.
+"""Bounded, full-market dividend and financial refresh.
 
-The market snapshot is daily; this job deliberately refreshes only the
-research core.  It stages all responses first, applies coverage gates, then
+The market snapshot is daily.  This job rotates through the active market in
+small daily batches, stages all responses first, applies coverage gates, then
 publishes one SQLite transaction.  Missing symbols never delete the last
 approved observation.
 """
@@ -14,6 +14,8 @@ import fcntl
 import json
 import re
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -38,8 +40,11 @@ from apply_migrations import apply
 
 SH_TZ = ZoneInfo("Asia/Shanghai")
 DEFAULT_DATABASE = PROJECT_ROOT / "data" / "database" / "high_dividend.db"
-DEFAULT_UNIVERSE = PROJECT_ROOT / "config" / "candidate_universe_core.json"
 DATE_COLUMN = re.compile(r"^\d{8}$")
+EMPTY_STOCK_DIVIDEND_COLUMNS = [
+    "实施方案公告日期", "分红类型", "送股比例", "转增比例", "派息比例",
+    "股权登记日", "除权日", "派息日", "股份到账日", "实施方案分红说明", "报告时间",
+]
 
 
 def source_call(adapter: str, params: dict[str, str]) -> pd.DataFrame:
@@ -48,7 +53,15 @@ def source_call(adapter: str, params: dict[str, str]) -> pd.DataFrame:
         "stock_financial_abstract": lambda: ak.stock_financial_abstract(symbol=params["symbol"]),
         "fund_etf_dividend_sina": lambda: ak.fund_etf_dividend_sina(symbol=params["symbol"]),
     }
-    frame = functions[adapter]()
+    try:
+        frame = functions[adapter]()
+    except KeyError as exc:
+        # AKShare raises this when CNInfo has no dividend table for a security,
+        # rather than returning an empty DataFrame.  That is an empty factual
+        # result, not a source outage.
+        if adapter == "stock_dividend_cninfo" and "实施方案公告日期" in str(exc):
+            return pd.DataFrame(columns=EMPTY_STOCK_DIVIDEND_COLUMNS)
+        raise
     if not isinstance(frame, pd.DataFrame):
         raise TypeError(f"{adapter} returned {type(frame).__name__}, expected DataFrame")
     return frame
@@ -66,17 +79,22 @@ def collect_baostock_financials(instruments: list[dict[str, Any]], year: int, qu
         "growth": {"YOYNI": "NETPROFIT_GROWTH", "YOYEquity": "EQUITY_GROWTH", "YOYAsset": "ASSET_GROWTH"},
     }
     records: list[dict[str, Any]] = []
-    succeeded: set[str] = set()
+    responded: set[str] = set()
     failures: list[dict[str, str]] = []
     try:
         for instrument in instruments:
             bs_code = f"{instrument['provider_symbol'][:2].lower()}.{instrument['code']}"
-            found = False
+            completed = True
             for statement_type, metric_map in metric_specs.items():
                 try:
                     function = getattr(bs, f"query_{statement_type}_data")
                     query = function(code=bs_code, year=year, quarter=quarter)
-                    if query.error_code != "0" or not query.next():
+                    if query.error_code != "0":
+                        failures.append({"source": "baostock_financial", "symbol": instrument["code"], "dataset": statement_type, "message": f"provider error {query.error_code}: {query.error_msg}"})
+                        completed = False
+                        break
+                    responded.add(instrument["code"])
+                    if not query.next():
                         continue
                     row = dict(zip(query.fields, query.get_row_data()))
                     report_date = row.get("statDate")
@@ -99,14 +117,18 @@ def collect_baostock_financials(instruments: list[dict[str, Any]], year: int, qu
                             "source_raw_sha256": None,
                             "observed_at": None,
                         })
-                        found = True
                 except Exception as exc:  # noqa: BLE001
                     failures.append({"source": "baostock_financial", "symbol": instrument["code"], "dataset": statement_type, "message": f"{type(exc).__name__}: {exc}"})
-            if found:
-                succeeded.add(instrument["code"])
+                    completed = False
+                    break
+            if completed:
+                # A successful empty statement is normal for some newly listed
+                # or reorganized companies.  Source health measures successful
+                # provider responses, not the presence of every optional fact.
+                responded.add(instrument["code"])
     finally:
         bs.logout()
-    return records, succeeded, failures
+    return records, responded, failures
 
 
 def lock_job() -> Any:
@@ -121,6 +143,13 @@ def lock_job() -> Any:
     handle.write(f"pid={__import__('os').getpid()} started_at={utc_now()}\n")
     handle.flush()
     return handle
+
+
+def open_database(database: Path) -> sqlite3.Connection:
+    """Open SQLite with a bounded wait for the concurrent history writer."""
+    connection = sqlite3.connect(database, timeout=180)
+    connection.execute("PRAGMA busy_timeout=180000")
+    return connection
 
 
 def financial_records(frame: pd.DataFrame, instrument: dict[str, Any], observed_at: str, raw_sha256: str, as_of: pd.Timestamp) -> list[dict[str, Any]]:
@@ -164,12 +193,74 @@ def financial_records(frame: pd.DataFrame, instrument: dict[str, Any], observed_
     return list(records.values())
 
 
+def load_market_batch(connection: sqlite3.Connection, asset_type: str, limit: int) -> list[dict[str, Any]]:
+    """Return the next active instruments after a persisted ticker cursor.
+
+    A cursor gives each active stock/ETF a turn even when a provider returns no
+    distribution event, which is common for ETFs.  It also avoids repeatedly
+    spending the free-source quota on the small original research core.
+    """
+    if limit <= 0:
+        return []
+    dataset = f"low_frequency_{asset_type}_cursor"
+    row = connection.execute(
+        "SELECT last_success_trade_date FROM ingestion_watermarks WHERE dataset=?", (dataset,)
+    ).fetchone()
+    cursor = str(row[0]) if row and row[0] else ""
+    after_cursor_query = """
+        SELECT instrument_id, ticker, name, asset_type, exchange
+        FROM instruments
+        WHERE active=1 AND asset_type=? AND ticker>?
+        ORDER BY ticker
+        LIMIT ?
+    """
+    rows = connection.execute(after_cursor_query, (asset_type, cursor, limit)).fetchall()
+    if len(rows) < limit:
+        wrap_query = """
+            SELECT instrument_id, ticker, name, asset_type, exchange
+            FROM instruments
+            WHERE active=1 AND asset_type=? AND ticker<=?
+            ORDER BY ticker
+            LIMIT ?
+        """
+        rows += connection.execute(wrap_query, (asset_type, cursor, limit - len(rows))).fetchall()
+    instruments: list[dict[str, Any]] = []
+    for instrument_id, ticker, name, item_type, exchange in rows:
+        code = str(ticker).split(".", 1)[0]
+        prefix = str(exchange).lower()
+        instruments.append({
+            "instrument_id": str(instrument_id),
+            "ticker": str(ticker),
+            "name": str(name),
+            "asset_type": str(item_type),
+            "exchange": str(exchange),
+            "code": code,
+            "provider_symbol": f"{prefix}{code}",
+        })
+    return instruments
+
+
+def advance_market_cursor(connection: sqlite3.Connection, asset_type: str, instruments: list[dict[str, Any]], run_id: str) -> None:
+    if not instruments:
+        return
+    dataset = f"low_frequency_{asset_type}_cursor"
+    connection.execute(
+        """INSERT INTO ingestion_watermarks(dataset, last_success_trade_date, last_success_run_id, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(dataset) DO UPDATE SET
+             last_success_trade_date=excluded.last_success_trade_date,
+             last_success_run_id=excluded.last_success_run_id,
+             updated_at=excluded.updated_at""",
+        (dataset, instruments[-1]["ticker"], run_id, utc_now()),
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
-    parser.add_argument("--universe", type=Path, default=DEFAULT_UNIVERSE)
     parser.add_argument("--as-of-date", default=datetime.now(SH_TZ).date().isoformat())
-    parser.add_argument("--timeout", type=int, default=45)
+    parser.add_argument("--stock-batch-size", type=int, default=150)
+    parser.add_argument("--etf-batch-size", type=int, default=75)
     args = parser.parse_args()
 
     lock = lock_job()
@@ -179,15 +270,14 @@ def main() -> int:
     try:
         apply(args.database)
         as_of = pd.Timestamp(args.as_of_date)
-        universe = json.loads(args.universe.read_text(encoding="utf-8"))
-        instruments = universe["instruments"]
-        stocks = [item for item in instruments if item["asset_type"] == "stock"]
-        etfs = [item for item in instruments if item["asset_type"] == "etf"]
+        with open_database(args.database) as conn:
+            stocks = load_market_batch(conn, "stock", args.stock_batch_size)
+            etfs = load_market_batch(conn, "etf", args.etf_batch_size)
         now = datetime.now(SH_TZ)
         run_id = f"lowfreq_{as_of.strftime('%Y%m%d')}_{now.strftime('%H%M%S')}"
         run_dir = PROJECT_ROOT / "data" / "raw" / run_id
         health_path = PROJECT_ROOT / "data" / "runtime" / "low-frequency-health.json"
-        with sqlite3.connect(args.database) as conn:
+        with open_database(args.database) as conn:
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute("INSERT OR IGNORE INTO data_sources(source_id, source_tier, notes) VALUES ('baostock_financial', 'convenience', 'Low-frequency compact financial facts; internal research only.')")
             conn.execute(
@@ -217,8 +307,12 @@ def main() -> int:
                 failures.append({"source": "akshare_cninfo_convenience", "symbol": code, "dataset": "stock_dividend_events", "message": f"{type(exc).__name__}: {exc}"})
 
         try:
-            financials, financial_symbols, financial_failures = collect_baostock_financials(stocks, year=as_of.year, quarter=1)
-            financial_ok = len(financial_symbols)
+            financials, _financial_symbols, financial_failures = collect_baostock_financials(stocks, year=as_of.year, quarter=1)
+            # A company may legitimately have no extractable current-quarter
+            # metric.  The quality gate therefore measures actual provider
+            # failures, not whether at least one optional field was returned.
+            failed_financial_symbols = {failure["symbol"] for failure in financial_failures}
+            financial_ok = len(stocks) - len(failed_financial_symbols)
             failures.extend(financial_failures)
             financial_raw = pd.DataFrame(financials)
             if not financial_raw.empty:
@@ -254,7 +348,7 @@ def main() -> int:
         manifest = {"run_id": run_id, "run_type": "autonomous_low_frequency", "research_as_of": observed_at, "as_of_date": args.as_of_date, "principal_cny": 200000, "status": "published" if passed else "quarantined", "row_counts": {"stock_dividend_events": len(stock_events), "etf_distribution_events": len(etf_events), "financial_observations": len(financials)}}
         if passed:
             manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        with sqlite3.connect(args.database) as conn:
+        with open_database(args.database) as conn:
             conn.execute("PRAGMA foreign_keys=ON")
             for failure in failures:
                 conn.execute("INSERT INTO ingestion_failures VALUES (?, ?, ?, 'source_failure', ?, ?)", (run_id, failure["source"], failure["dataset"], failure["message"], utc_now()))
@@ -277,6 +371,8 @@ def main() -> int:
                 for row in financials:
                     conn.execute("INSERT OR IGNORE INTO financial_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (run_id, row["instrument_id"], row["statement_type"], row["metric"], row["value"], row["currency"], row["report_date"], row.get("published_at_date"), row.get("updated_at_date"), row["source_id"], row.get("source_raw_sha256"), row.get("observed_at")))
                 conn.execute("INSERT INTO ingestion_watermarks(dataset, last_success_trade_date, last_success_run_id, updated_at) VALUES ('low_frequency_core', ?, ?, ?) ON CONFLICT(dataset) DO UPDATE SET last_success_trade_date=excluded.last_success_trade_date, last_success_run_id=excluded.last_success_run_id, updated_at=excluded.updated_at", (args.as_of_date, run_id, utc_now()))
+                advance_market_cursor(conn, "stock", stocks, run_id)
+                advance_market_cursor(conn, "etf", etfs, run_id)
                 release_id = f"release_{run_id}"
                 conn.execute("UPDATE low_frequency_batches SET status='published', dividend_events_inserted=?, etf_events_inserted=?, financial_observations_inserted=?, stock_dividend_symbols_succeeded=?, financial_symbols_succeeded=?, etf_distribution_symbols_succeeded=? WHERE run_id=?", (len(stock_events), len(etf_events), len(financials), stock_div_ok, financial_ok, etf_ok, run_id))
                 conn.execute("UPDATE ingestion_runs SET status='published', finished_at=?, release_id=? WHERE run_id=?", (utc_now(), release_id, run_id))
@@ -286,13 +382,28 @@ def main() -> int:
                 conn.execute("UPDATE ingestion_runs SET status='quarantined', finished_at=?, message=? WHERE run_id=?", (utc_now(), "coverage gate failed", run_id))
             conn.commit()
         if passed:
-            with sqlite3.connect(args.database) as conn:
+            with open_database(args.database) as conn:
                 conn.execute("UPDATE database_releases SET database_sha256=?", (canonical_database_sha256(args.database),))
                 conn.commit()
         health = {"run_id": run_id, "status": "published" if passed else "quarantined", "as_of_date": args.as_of_date, "checks": [{"name": name, "passed": ok, "details": detail} for name, ok, detail in checks], "failures": failures, "backup": None if backup_path is None else str(backup_path.relative_to(PROJECT_ROOT))}
         write_health(health_path, health)
         print(json.dumps(health, ensure_ascii=False, indent=2))
-        return 0 if passed else 2
+        if not passed:
+            return 2
+        publisher = PROJECT_ROOT / "scripts" / "publish_release.py"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(publisher),
+                "--runtime-root", str(PROJECT_ROOT),
+                "--database", str(args.database),
+                "--release-id", f"release_{run_id}",
+                "--available-cutoff", f"{args.as_of_date}T15:00:00+08:00",
+            ],
+            text=True,
+            check=False,
+        )
+        return completed.returncode
     finally:
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
         lock.close()

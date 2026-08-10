@@ -1,0 +1,29 @@
+{
+  "rule_id": "china_high_dividend_low_vol_proxy",
+  "rule_version": "1.0.0",
+  "scope": "a_share_current_snapshot_research",
+  "status": "active",
+  "required_parameters": {
+    "yield_shortlist_count": 150,
+    "target_count": 100,
+    "minimum_trading_days": 180,
+    "minimum_advt_cny": 20000000,
+    "advt_calendar_days": 92,
+    "required_datasets": ["market_prices", "price_history", "stock_dividends"]
+  },
+  "missing_data_policy": "资料不足",
+  "reason_codes": {
+    "ST_EXCLUDED": "当前证券简称带 ST 或 *ST",
+    "MISSING_ONE_YEAR_PRICE_HISTORY": "近一年有效交易日不足 180 日",
+    "MISSING_TURNOVER": "缺少近三个月成交额",
+    "LIQUIDITY_BELOW_ENTRY": "近三个月平均日成交额低于 2000 万元",
+    "NO_ORDINARY_TTM_DIVIDEND": "过去 12 个月没有已实施常规现金分红",
+    "YIELD_RANK_BELOW_SHORTLIST": "历史 TTM 股息率未进入前 150",
+    "VOLATILITY_RANK_BELOW_CUTOFF": "前 150 高股息股票中一年价格波动率未进入最低 100",
+    "PASS": "进入高股息后再按低波动筛选的前 100 个研究位置"
+  },
+  "methodology_sources": [
+    "https://www.spglobal.com/spdji/en/documents/methodologies/methodology-sp-low-volatility-high-dividend-indices.pdf"
+  ],
+  "replication_status": "research_proxy_not_index_replication"
+}

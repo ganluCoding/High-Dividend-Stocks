@@ -11,3 +11,10 @@ logs/
 
 # Generated local runtime only.
 runtime/
+
+# Desktop frontend build output and dependencies.
+client/node_modules/
+client/dist/
+client/src-tauri/target/
+client/src-tauri/gen/
+client/tsconfig.tsbuildinfo
