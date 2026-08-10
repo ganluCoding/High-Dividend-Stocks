@@ -206,6 +206,28 @@ def acquire_lock(runtime_root: Path):
     return handle
 
 
+def collect_stock_history_with_relogin(
+    instrument: dict[str, str],
+    start_date: str,
+    end_date: str,
+    bs_module: Any,
+) -> list[dict[str, Any]]:
+    """Retry once after BaoStock expires its long-lived session."""
+    try:
+        return collect_baostock_daily(instrument["ticker"], start_date, end_date, bs_module)
+    except RuntimeError as exc:
+        if "用户未登录" not in str(exc):
+            raise
+        try:
+            bs_module.logout()
+        except Exception:  # noqa: BLE001 - an expired session may reject logout.
+            pass
+        login = bs_module.login()
+        if login.error_code != "0":
+            raise RuntimeError(f"BaoStock re-login failed: {login.error_msg}") from exc
+        return collect_baostock_daily(instrument["ticker"], start_date, end_date, bs_module)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
@@ -260,7 +282,7 @@ def main() -> int:
         def fetch_one(instrument: dict[str, str]) -> tuple[list[dict[str, Any]], str | None]:
             try:
                 if args.asset_type == "stock":
-                    rows = collect_baostock_daily(instrument["ticker"], args.start_date, args.end_date, bs_module)
+                    rows = collect_stock_history_with_relogin(instrument, args.start_date, args.end_date, bs_module)
                 else:
                     rows = collect_sina_etf_daily(instrument["ticker"], args.start_date, args.end_date)
                 return rows, None

@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
-from collect_price_history import provider_code, sina_code, write_raw  # noqa: E402
+from collect_price_history import collect_stock_history_with_relogin, provider_code, select_instruments, sina_code, write_raw  # noqa: E402
 
 
 class PriceHistoryCollectionTests(unittest.TestCase):
@@ -37,6 +39,43 @@ class PriceHistoryCollectionTests(unittest.TestCase):
             self.assertEqual(metadata["content_sha256"], digest)
             self.assertEqual(metadata["row_count"], 1)
             self.assertEqual(metadata["start_date"], "2026-08-07")
+
+    def test_full_market_selection_does_not_require_dividend_history(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        connection.executescript(
+            """
+            CREATE TABLE instruments (instrument_id TEXT, ticker TEXT, name TEXT, asset_type TEXT, active INTEGER);
+            CREATE TABLE price_daily (instrument_id TEXT, trade_date TEXT, adjustment TEXT);
+            INSERT INTO instruments VALUES ('CN.XSHG.600000', '600000.SH', '浦发银行', 'stock', 1);
+            """
+        )
+        selected = select_instruments(connection, "stock", 1000, "2019-01-01", 0, 10)
+        self.assertEqual([item["ticker"] for item in selected], ["600000.SH"])
+
+    def test_stock_history_relogs_in_after_expired_baostock_session(self) -> None:
+        class Result:
+            error_code = "0"
+            error_msg = ""
+
+        class FakeBaoStock:
+            def __init__(self) -> None:
+                self.logins = 0
+                self.logouts = 0
+
+            def login(self):
+                self.logins += 1
+                return Result()
+
+            def logout(self) -> None:
+                self.logouts += 1
+
+        provider = FakeBaoStock()
+        with patch("collect_price_history.collect_baostock_daily", side_effect=[RuntimeError("BaoStock query failed: 用户未登录"), [{"trade_date": "2026-08-10"}]]) as mocked:
+            rows = collect_stock_history_with_relogin({"ticker": "600900.SH"}, "2019-01-01", "2026-08-10", provider)
+        self.assertEqual(rows, [{"trade_date": "2026-08-10"}])
+        self.assertEqual(provider.logins, 1)
+        self.assertEqual(provider.logouts, 1)
+        self.assertEqual(mocked.call_count, 2)
 
 
 if __name__ == "__main__":

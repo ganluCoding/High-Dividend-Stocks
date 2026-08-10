@@ -5,9 +5,9 @@
   <key>Label</key>
   <string>com.highdividend.historical-backfill</string>
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
   <key>StartInterval</key>
-  <integer>86400</integer>
+  <integer>3600</integer>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>

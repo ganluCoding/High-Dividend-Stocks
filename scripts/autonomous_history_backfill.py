@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run bounded historical-price batches and publish them atomically.
 
-This agent is intentionally low frequency.  It advances through instruments
-that do not yet have a long ``price_daily`` history, so a failed provider call
-does not block the existing release or delete prior rows.
+This agent advances through the full active market that does not yet have a
+long ``price_daily`` history.  It runs bounded hourly batches, so a failed
+provider call does not block the existing release or delete prior rows.
 """
 
 from __future__ import annotations
@@ -41,13 +41,11 @@ def run_batch(runtime: Path, end_date: str, asset_type: str, limit: int) -> bool
         "--start-date", "2019-01-01",
         "--end-date", end_date,
         "--limit", str(limit),
-        "--minimum-existing-days", "1000",
+        "--minimum-existing-days", "1250",
         "--minimum-success-ratio", "0.80",
         "--sleep-seconds", "0.04" if asset_type == "etf" else "0.20",
         "--workers", "6" if asset_type == "etf" else "1",
     ]
-    if asset_type == "stock":
-        command.append("--dividend-only")
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     if completed.stdout:
         print(completed.stdout, end="")
@@ -59,8 +57,8 @@ def run_batch(runtime: Path, end_date: str, asset_type: str, limit: int) -> bool
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
-    parser.add_argument("--stock-batch-size", type=int, default=500)
-    parser.add_argument("--etf-batch-size", type=int, default=300)
+    parser.add_argument("--stock-batch-size", type=int, default=300)
+    parser.add_argument("--etf-batch-size", type=int, default=200)
     args = parser.parse_args()
     runtime = args.runtime_root.expanduser()
     end_date = latest_market_date(runtime)

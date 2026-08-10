@@ -5,9 +5,9 @@
   <key>Label</key>
   <string>com.highdividend.low-frequency-update</string>
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
   <key>StartInterval</key>
-  <integer>604800</integer>
+  <integer>86400</integer>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>
