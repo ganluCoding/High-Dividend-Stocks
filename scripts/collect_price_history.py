@@ -63,14 +63,23 @@ def sina_code(ticker: str) -> str:
     return provider_code(ticker).replace(".", "", 1)
 
 
-def collect_baostock_daily(ticker: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
+def collect_baostock_daily(ticker: str, start_date: str, end_date: str, bs_module: Any | None = None) -> list[dict[str, Any]]:
+    """Fetch one ticker using an already-authenticated BaoStock session when supplied.
+
+    A batch should keep one login for all tickers. Logging in and out for every
+    security is both slow and more likely to trigger the provider's session
+    throttling; callers that pass ``bs_module`` own that session lifecycle.
+    """
     import baostock as bs
 
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"BaoStock login failed: {login.error_msg}")
+    session_owned = bs_module is None
+    client = bs_module or bs
+    if session_owned:
+        login = client.login()
+        if login.error_code != "0":
+            raise RuntimeError(f"BaoStock login failed: {login.error_msg}")
     try:
-        query = bs.query_history_k_data_plus(
+        query = client.query_history_k_data_plus(
             provider_code(ticker),
             "date,code,open,high,low,close,volume,amount,adjustflag",
             start_date=start_date,
@@ -99,7 +108,8 @@ def collect_baostock_daily(ticker: str, start_date: str, end_date: str) -> list[
             })
         return rows
     finally:
-        bs.logout()
+        if session_owned:
+            client.logout()
 
 
 def collect_sina_etf_daily(ticker: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
@@ -154,21 +164,31 @@ def write_raw(path: Path, instrument: dict[str, str], rows: list[dict[str, Any]]
     return metadata["content_sha256"]
 
 
-def select_instruments(connection: sqlite3.Connection, asset_type: str, minimum_existing_days: int, offset: int, limit: int) -> list[dict[str, str]]:
+def select_instruments(connection: sqlite3.Connection, asset_type: str, minimum_existing_days: int, start_date: str, offset: int, limit: int, dividend_only: bool = False) -> list[dict[str, str]]:
     existing = {
-        row[0]: int(row[1])
+        row[0]: (int(row[1]), str(row[2]) if row[2] else None)
         for row in connection.execute(
-            "SELECT instrument_id, COUNT(DISTINCT trade_date) FROM price_daily WHERE adjustment='unadjusted' GROUP BY instrument_id"
+            "SELECT instrument_id, COUNT(DISTINCT trade_date), MIN(trade_date) FROM price_daily WHERE adjustment='unadjusted' GROUP BY instrument_id"
         )
     }
-    rows = connection.execute(
-        "SELECT instrument_id, ticker, name, asset_type FROM instruments WHERE asset_type=? AND active=1 ORDER BY instrument_id",
-        (asset_type,),
-    ).fetchall()
+    query = "SELECT instrument_id, ticker, name, asset_type FROM instruments WHERE asset_type=? AND active=1"
+    params: list[Any] = [asset_type]
+    if dividend_only and asset_type == "stock":
+        query += " AND EXISTS (SELECT 1 FROM stock_dividend_events d WHERE d.instrument_id=instruments.instrument_id AND d.status='implemented')"
+    query += " ORDER BY instrument_id"
+    rows = connection.execute(query, params).fetchall()
     candidates = [
         {"instrument_id": str(row[0]), "ticker": str(row[1]), "name": str(row[2]), "asset_type": str(row[3])}
         for row in rows
-        if existing.get(row[0], 0) < minimum_existing_days
+        if (
+            row[0] not in existing
+            or existing[row[0]][0] == 0
+            or (
+                existing[row[0]][0] < minimum_existing_days
+                and existing[row[0]][1] is not None
+                and existing[row[0]][1] <= start_date
+            )
+        )
     ]
     return candidates[offset : offset + limit]
 
@@ -194,6 +214,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--minimum-existing-days", type=int, default=1000)
+    parser.add_argument("--dividend-only", action="store_true", help="For stocks, prioritize instruments with an implemented dividend event.")
     parser.add_argument("--minimum-success-ratio", type=float, default=0.80)
     parser.add_argument("--sleep-seconds", type=float, default=0.20)
     parser.add_argument("--run-id")
@@ -217,7 +238,7 @@ def main() -> int:
     raw_dir.mkdir(parents=True, exist_ok=False)
     try:
         with sqlite3.connect(database) as connection:
-            selected = select_instruments(connection, args.asset_type, args.minimum_existing_days, args.offset, args.limit)
+            selected = select_instruments(connection, args.asset_type, args.minimum_existing_days, args.start_date, args.offset, args.limit, args.dividend_only)
         if not selected:
             payload = {"run_id": run_id, "status": "nothing_to_do", "asset_type": args.asset_type, "selected": 0}
             manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,26 +249,36 @@ def main() -> int:
         success: list[dict[str, Any]] = []
         failures: list[dict[str, str]] = []
         raw_files: list[dict[str, Any]] = []
-        for index, instrument in enumerate(selected, start=1):
-            print(f"[{index}/{len(selected)}] {instrument['ticker']} {instrument['name']}", flush=True)
-            try:
-                if args.asset_type == "stock":
-                    rows = collect_baostock_daily(instrument["ticker"], args.start_date, args.end_date)
-                else:
-                    rows = collect_sina_etf_daily(instrument["ticker"], args.start_date, args.end_date)
-                unique_dates = {row["trade_date"] for row in rows}
-                if len(unique_dates) != len(rows):
-                    raise RuntimeError("duplicate trade dates returned")
-                if not rows:
-                    raise RuntimeError("provider returned no valid rows")
-                raw_path = raw_dir / f"{instrument['instrument_id']}.csv"
-                content_hash = write_raw(raw_path, instrument, rows, observed_at, source_id)
-                raw_files.append({"instrument_id": instrument["instrument_id"], "path": str(raw_path.relative_to(runtime)), "sha256": content_hash, "rows": len(rows)})
-                success.append({"instrument": instrument, "rows": rows, "raw_sha256": content_hash})
-            except Exception as exc:  # noqa: BLE001
-                failures.append({"instrument_id": instrument["instrument_id"], "ticker": instrument["ticker"], "error": f"{type(exc).__name__}: {exc}"})
-            if args.sleep_seconds > 0:
-                time.sleep(args.sleep_seconds)
+        bs_module = None
+        if args.asset_type == "stock":
+            import baostock as bs_module
+            login = bs_module.login()
+            if login.error_code != "0":
+                raise RuntimeError(f"BaoStock login failed: {login.error_msg}")
+        try:
+            for index, instrument in enumerate(selected, start=1):
+                print(f"[{index}/{len(selected)}] {instrument['ticker']} {instrument['name']}", flush=True)
+                try:
+                    if args.asset_type == "stock":
+                        rows = collect_baostock_daily(instrument["ticker"], args.start_date, args.end_date, bs_module)
+                    else:
+                        rows = collect_sina_etf_daily(instrument["ticker"], args.start_date, args.end_date)
+                    unique_dates = {row["trade_date"] for row in rows}
+                    if len(unique_dates) != len(rows):
+                        raise RuntimeError("duplicate trade dates returned")
+                    if not rows:
+                        raise RuntimeError("provider returned no valid rows")
+                    raw_path = raw_dir / f"{instrument['instrument_id']}.csv"
+                    content_hash = write_raw(raw_path, instrument, rows, observed_at, source_id)
+                    raw_files.append({"instrument_id": instrument["instrument_id"], "path": str(raw_path.relative_to(runtime)), "sha256": content_hash, "rows": len(rows)})
+                    success.append({"instrument": instrument, "rows": rows, "raw_sha256": content_hash})
+                except Exception as exc:  # noqa: BLE001
+                    failures.append({"instrument_id": instrument["instrument_id"], "ticker": instrument["ticker"], "error": f"{type(exc).__name__}: {exc}"})
+                if args.sleep_seconds > 0:
+                    time.sleep(args.sleep_seconds)
+        finally:
+            if bs_module is not None:
+                bs_module.logout()
 
         success_ratio = len(success) / len(selected)
         quality = {

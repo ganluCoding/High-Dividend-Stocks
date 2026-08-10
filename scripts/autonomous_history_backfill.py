@@ -45,6 +45,8 @@ def run_batch(runtime: Path, end_date: str, asset_type: str, limit: int) -> bool
         "--minimum-success-ratio", "0.80",
         "--sleep-seconds", "0.20",
     ]
+    if asset_type == "stock":
+        command.append("--dividend-only")
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     if completed.stdout:
         print(completed.stdout, end="")
@@ -56,8 +58,8 @@ def run_batch(runtime: Path, end_date: str, asset_type: str, limit: int) -> bool
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
-    parser.add_argument("--stock-batch-size", type=int, default=100)
-    parser.add_argument("--etf-batch-size", type=int, default=50)
+    parser.add_argument("--stock-batch-size", type=int, default=500)
+    parser.add_argument("--etf-batch-size", type=int, default=100)
     args = parser.parse_args()
     runtime = args.runtime_root.expanduser()
     end_date = latest_market_date(runtime)
