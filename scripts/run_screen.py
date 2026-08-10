@@ -11,12 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from release_protocol import resolve_release, sha256_file
+from release_protocol import resolve_release
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUNTIME_ROOT = Path.home() / "Library" / "Application Support" / "HighDividend"
 DEFAULT_WORKBENCH = DEFAULT_RUNTIME_ROOT / "workbench.db"
+ENGINE_VERSION = "screen-engine-v1"
 
 
 def utc_now() -> str:
@@ -35,6 +36,18 @@ def initialize_workbench(path: Path) -> None:
         connection.executescript(schema)
         connection.execute("INSERT OR REPLACE INTO workbench_metadata VALUES ('schema_version', 'workbench-v1')")
         connection.commit()
+
+
+def record_artifact(connection: sqlite3.Connection, artifact_type: str, artifact_id: str, path: Path) -> str:
+    content = path.read_text(encoding="utf-8")
+    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    connection.execute(
+        """INSERT OR IGNORE INTO immutable_artifacts_v1
+           (artifact_type, artifact_id, content_sha256, content_text, created_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (artifact_type, artifact_id, content_hash, content, utc_now()),
+    )
+    return content_hash
 
 
 def coverage_is_complete(connection: sqlite3.Connection, instrument_id: str, datasets: list[str], available_cutoff: str) -> bool:
@@ -198,6 +211,8 @@ def main() -> int:
     facts = release_dir / "facts.sqlite"
     initialize_workbench(args.workbench.expanduser())
     taxonomy = load_taxonomy(args.taxonomy)
+    rule_hash = hashlib.sha256(args.rule.read_bytes()).hexdigest()
+    taxonomy_hash = hashlib.sha256(args.taxonomy.read_bytes()).hexdigest()
     with sqlite3.connect(f"file:{facts}?mode=ro", uri=True) as facts_connection:
         if rule["rule_id"] == "stable_dividend_stock":
             results = run_stock_rule(facts_connection, rule, taxonomy, manifest["available_cutoff"])
@@ -207,10 +222,23 @@ def main() -> int:
             results = run_cyclical_rule(facts_connection, rule, taxonomy, manifest["available_cutoff"])
         else:
             raise SystemExit(f"Unsupported rule id: {rule['rule_id']}")
-    rule_hash = sha256_file(args.rule)
-    screen_run_id = hashlib.sha256(f"{manifest['release_id']}:{rule_hash}".encode()).hexdigest()[:24]
+    screen_run_id = hashlib.sha256(f"{manifest['release_id']}:{manifest['facts_sha256']}:{rule_hash}:{taxonomy_hash}:{ENGINE_VERSION}".encode()).hexdigest()[:24]
     with sqlite3.connect(args.workbench.expanduser()) as workbench:
-        workbench.execute("INSERT OR REPLACE INTO rule_versions VALUES (?, ?, ?, ?)", (rule["rule_id"], rule["rule_version"], rule_hash, utc_now()))
+        workbench.execute("INSERT OR IGNORE INTO rule_versions VALUES (?, ?, ?, ?)", (rule["rule_id"], rule["rule_version"], rule_hash, utc_now()))
+        # Keep the exact rule/taxonomy text alongside the run contract.  This
+        # intentionally uses INSERT OR IGNORE so a later edit cannot overwrite
+        # the artifact used by an earlier run.
+        rule_content = args.rule.read_text(encoding="utf-8")
+        taxonomy_content = args.taxonomy.read_text(encoding="utf-8")
+        workbench.executemany(
+            """INSERT OR IGNORE INTO immutable_artifacts_v1
+               (artifact_type, artifact_id, content_sha256, content_text, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            [
+                ("rule", f"{rule['rule_id']}@{rule['rule_version']}", rule_hash, rule_content, utc_now()),
+                ("taxonomy", args.taxonomy.name, taxonomy_hash, taxonomy_content, utc_now()),
+            ],
+        )
         workbench.execute("INSERT OR REPLACE INTO screen_runs_v1 VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')", (
             screen_run_id, manifest["release_id"], manifest["facts_sha256"], rule["rule_id"], rule["rule_version"], manifest["available_cutoff"], utc_now(),
         ))

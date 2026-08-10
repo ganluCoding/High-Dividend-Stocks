@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from release_protocol import resolve_release, sha256_file, utc_now
-from run_screen import initialize_workbench
+from run_screen import initialize_workbench, record_artifact
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +47,8 @@ def run_strategy(strategy_id: str, runtime_root: Path, workbench: Path, release_
     strategy_run_id = hashlib.sha256(run_material.encode()).hexdigest()[:24]
     initialize_workbench(workbench)
     with sqlite3.connect(workbench) as connection:
-        connection.execute("INSERT OR REPLACE INTO strategy_versions_v1 VALUES (?, ?, ?, ?, ?, ?)", (
+        record_artifact(connection, "strategy", f"{strategy['strategy_id']}@{strategy['strategy_version']}", strategy_path)
+        connection.execute("INSERT OR IGNORE INTO strategy_versions_v1 VALUES (?, ?, ?, ?, ?, ?)", (
             strategy["strategy_id"], strategy["strategy_version"], strategy_sha, strategy["name"], strategy["lane"], utc_now(),
         ))
         connection.execute("INSERT OR REPLACE INTO strategy_runs_v1 VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')", (

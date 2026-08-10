@@ -76,8 +76,11 @@ class ReleaseAndScreeningTests(unittest.TestCase):
             self.assertIn('"资料足以研究": 1', completed.stdout)
             with sqlite3.connect(workbench) as connection:
                 state, reasons = connection.execute("SELECT research_state, reason_codes_json FROM screen_results_v1").fetchone()
+                artifacts = connection.execute("SELECT artifact_type, artifact_id FROM immutable_artifacts_v1 ORDER BY artifact_type, artifact_id").fetchall()
             self.assertEqual(state, "资料足以研究")
             self.assertEqual(json.loads(reasons), ["PASS"])
+            self.assertIn(("rule", "stable_dividend_stock@1.0.0"), artifacts)
+            self.assertIn(("taxonomy", "taxonomy.json"), artifacts)
 
     def test_duplicate_logical_dividend_is_published_once_and_counted_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -139,6 +142,9 @@ class ReleaseAndScreeningTests(unittest.TestCase):
                 cwd=PROJECT_ROOT, check=True, capture_output=True, text=True,
             )
             self.assertEqual(json.loads(pinned.stdout)["result"]["release_id"], "release-strategy")
+            with sqlite3.connect(workbench) as connection:
+                artifact_types = {row[0] for row in connection.execute("SELECT DISTINCT artifact_type FROM immutable_artifacts_v1")}
+            self.assertIn("strategy", artifact_types)
 
 
 if __name__ == "__main__":

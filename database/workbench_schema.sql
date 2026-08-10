@@ -5,6 +5,20 @@ CREATE TABLE IF NOT EXISTS workbench_metadata (
     value TEXT NOT NULL
 );
 
+-- Content-addressed research artifacts.  A changed file creates a new row;
+-- historical hashes are never overwritten by a later run.
+CREATE TABLE IF NOT EXISTS immutable_artifacts_v1 (
+    artifact_type TEXT NOT NULL,
+    artifact_id TEXT NOT NULL,
+    content_sha256 TEXT NOT NULL,
+    content_text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (artifact_type, artifact_id, content_sha256)
+);
+
+CREATE INDEX IF NOT EXISTS idx_immutable_artifacts_lookup
+    ON immutable_artifacts_v1(artifact_type, artifact_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS rule_versions (
     rule_id TEXT NOT NULL,
     rule_version TEXT NOT NULL,

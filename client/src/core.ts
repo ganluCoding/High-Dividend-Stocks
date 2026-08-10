@@ -17,6 +17,15 @@ export type Dashboard = {
   latest_runs: Record<string, { screen_run_id: string }>;
 };
 
+export type RuntimeStatus = {
+  runtime_root: string;
+  code_ready: boolean;
+  data_ready: boolean;
+  python_available: boolean;
+  bundled_seed_available: boolean;
+  missing: string[];
+};
+
 export type Coverage = { dataset: string; instruments: number; collected: number; average_completeness: number };
 export type Candidate = { instrument_id: string; research_state: string; reason_codes: string[]; payload: Record<string, unknown> };
 export type StrategyRun = { strategy_run_id: string; strategy: Strategy; release_id: string; screen: { screen_run_id: string; states: Record<string, number> } };
@@ -28,4 +37,12 @@ export async function core<T>(command: string, payload: Record<string, unknown> 
   const response = JSON.parse(raw) as CoreResponse<T>;
   if (!response.ok || response.result === undefined) throw new Error(response.error?.message ?? "本地研究内核未返回结果");
   return response.result;
+}
+
+export function runtimeStatus(): Promise<RuntimeStatus> {
+  return invoke<RuntimeStatus>("runtime_status");
+}
+
+export function bootstrapRuntime(): Promise<RuntimeStatus> {
+  return invoke<RuntimeStatus>("bootstrap_runtime");
 }

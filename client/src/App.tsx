@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Candidate, core, Coverage, Dashboard, Strategy, StrategyRun } from "./core";
+import { bootstrapRuntime, Candidate, core, Coverage, Dashboard, runtimeStatus, Strategy, StrategyRun } from "./core";
 
 type Page = "home" | "research" | "strategies" | "draft" | "method";
 
@@ -31,6 +31,13 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
+      let runtime = await runtimeStatus();
+      if (!runtime.code_ready && runtime.bundled_seed_available) {
+        runtime = await bootstrapRuntime();
+      }
+      if (!runtime.python_available) throw new Error("本机 Python 运行时不可用");
+      if (!runtime.code_ready) throw new Error(`研究内核未就绪：${runtime.missing.join("、")}`);
+      if (!runtime.data_ready) throw new Error("本机事实发布包未就绪，请先部署数据运行时");
       setDashboard(await core<Dashboard>("dashboard"));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "无法读取本机发布包");

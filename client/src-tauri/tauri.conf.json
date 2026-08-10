@@ -20,7 +20,7 @@
         "resizable": true
       }
     ],
-    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:1420" }
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" }
   },
   "bundle": {
     "active": true,
@@ -28,6 +28,13 @@
     "icon": [],
     "category": "Finance",
     "shortDescription": "本机优先的中国高股息研究工具",
-    "longDescription": "读取本机不可变事实发布包，运行版本化研究策略，不连接券商、不自动交易。"
+    "longDescription": "读取本机不可变事实发布包，运行版本化研究策略，不连接券商、不自动交易。",
+    "resources": {
+      "../../scripts": "scripts",
+      "../../rules": "rules",
+      "../../strategies": "strategies",
+      "../../config": "config",
+      "../../database": "database"
+    }
   }
 }

@@ -11,7 +11,7 @@
 
 ## 总体结论
 
-客户端的“本地只读、无交易入口、历史分红不是未来承诺、草案暂锁定”边界是正确的。经过本轮修复，分红重复计数、候选通道过滤和策略运行 release 绑定已通过复验；桌面安装包 Runtime 自举、完整 PIT 回放和更丰富的覆盖解释仍未完成。
+客户端的“本地只读、无交易入口、历史分红不是未来承诺、草案暂锁定”边界是正确的。经过本轮修复，分红重复计数、候选通道过滤、策略运行 release 绑定和 Runtime 代码资源自举已通过复验；完整 PIT 回放和更丰富的覆盖解释仍未完成。
 
 ## 本轮修复复验
 
@@ -19,6 +19,8 @@
 - 稳健/ETF/周期三套策略均重跑并绑定该 release；
 - React 前端只展示当前策略允许的状态：稳健/ETF 为 `资料足以研究`，周期为 `继续观察`；
 - `desktop_core run_strategy` 缺少 `release_id` 时拒绝执行；
+- Tauri 安装包已打包 scripts/rules/strategies/config/database 资源，启动前预检并支持复制到用户 Runtime；
+- `immutable_artifacts_v1` 已记录策略、规则和 taxonomy 内容哈希，不再用后一次文件覆盖历史工件记录；
 - 4 个离线测试、6 个 golden fixtures、TypeScript、Vite 和 Cargo check 均通过。
 
 ## P0：必须先处理
@@ -35,11 +37,11 @@
 
 修复：发布阶段按逻辑事件版本去重，筛选器再按当前有效事件和 available cutoff 汇总；已重发 release 并重跑策略。
 
-### 3. 可安装 App 没有随包提供研究内核
+### 3. 可安装 App 没有随包提供研究内核（已修复代码资源部分）
 
 `client/src-tauri/src/lib.rs:4-26` 固定依赖本机 `/usr/bin/python3` 和 App Support 下的脚本；`client/src-tauri/tauri.conf.json:25-32` 没有 sidecar/resources；`deploy_runtime.py` 不会随 DMG 自动执行。新机器没有预装 runtime 时，App 首次点击即失败。
 
-建议：将 Python 研究内核作为签名 sidecar/resources 打包并首次启动原子部署，或明确提供独立 Runtime 安装器、版本校验和修复入口。
+修复：安装包现在包含研究脚本、规则、策略、配置和 schema；Tauri 启动前预检，缺少代码时自动部署到用户 Runtime。Python 解释器与第三方依赖仍依赖本机环境，尚未升级为签名 Python sidecar。
 
 ### 4. 策略运行未固定首页刚展示的 release（已修复）
 
@@ -47,11 +49,11 @@
 
 修复：Dashboard 的 release_id 已进入页面状态并传入运行请求；后端缺少 release_id 时拒绝运行。
 
-### 5. 版本工件与 PIT 回放合同不足
+### 5. 版本工件与 PIT 回放合同不足（部分修复）
 
 策略/规则/taxonomy 从可变 runtime 文件读取；`strategy_versions_v1` 使用 `INSERT OR REPLACE`，运行记录没有完整保存 taxonomy、参数和引擎哈希。筛选查询也没有严格按 `available_cutoff` 过滤披露时间。
 
-建议：以内容哈希保存不可变工件；运行记录保存所有哈希与参数；所有事实通过 PIT 查询层；补历史 cutoff 注入未来披露的回归测试。
+修复：策略、规则和 taxonomy 已以内容哈希保存不可变快照，screen run ID 已包含 rule/taxonomy hash 和引擎版本；仍需补完整参数快照、修订链回放和所有事实的 PIT 查询层。
 
 ## P1：MVP 前应处理
 
@@ -79,4 +81,4 @@
 
 ## 审阅后的建议顺序
 
-下一阶段补 Runtime bootstrap、不可变策略/规则工件、完整 PIT 回放和覆盖率主路径展示，再继续开发组合策略与桌面端高级能力。
+下一阶段补 Python 依赖 sidecar、完整 PIT/修订链回放和覆盖率主路径展示，再继续开发组合策略与桌面端高级能力。

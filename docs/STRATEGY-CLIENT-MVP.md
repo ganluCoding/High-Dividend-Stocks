@@ -8,7 +8,7 @@
 - `dividend_etf_research@1.0.0`：权益红利 ETF 分散研究；
 - `cyclical_dividend_satellite_watch@1.0.0`：周期红利卫星观察。
 
-每次运行都会写入 `workbench.db`：`release_id`、事实哈希、策略版本、筛选运行编号和结果状态。历史运行不会被“当前”事实覆盖。
+每次运行都会写入 `workbench.db`：`release_id`、事实哈希、策略版本、筛选运行编号和结果状态；同时记录策略、规则和 taxonomy 的内容哈希与原文快照到 `immutable_artifacts_v1`。历史运行不会被“当前”事实覆盖。
 
 ## 客户端三步
 
@@ -22,7 +22,7 @@ Tauri + React 客户端只有三个主入口：
 
 ## 当前实际数据边界
 
-使用 `release_20260809_v1` 时：
+使用当前发布包 `release_20260810_v3` 时：
 
 - 股票：22 只“资料足以研究”、9 只周期标的不纳入稳健模板，其余资料不足；
 - ETF：由于产品事实尚未接入，全部保持“资料不足”；
@@ -32,7 +32,9 @@ Tauri + React 客户端只有三个主入口：
 
 ## 本地运行
 
-先部署运行时，使客户端可以找到 `~/Library/Application Support/HighDividend/scripts/desktop_core.py`：
+安装包已内置 scripts、rules、strategies、config 和 database 资源。首次启动会先做 Runtime 预检；缺少代码时自动复制到 `~/Library/Application Support/HighDividend`，不会覆盖 `data/`、发布包或 workbench 数据。若本机没有事实发布包，客户端会明确提示数据运行时未就绪。
+
+手动部署/修复运行时仍可使用：
 
 ```bash
 python3 scripts/deploy_runtime.py
