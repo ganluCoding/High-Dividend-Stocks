@@ -34,10 +34,12 @@ def main() -> int:
         "scripts/desktop_core.py",
         "scripts/collect_price_history.py",
         "scripts/autonomous_history_backfill.py",
+        "scripts/run_mvp_backtest.py",
         "scripts/install_release_publisher_agent.py",
         "scripts/collect_spike_data.py",
         "config/autonomous_update.json",
         "config/candidate_universe_core.json",
+        "config/backtest_mvp.json",
     ):
         copy_file(PROJECT_ROOT / relative, runtime / relative)
     shutil.copytree(PROJECT_ROOT / "database" / "migrations", runtime / "database" / "migrations", dirs_exist_ok=True)
