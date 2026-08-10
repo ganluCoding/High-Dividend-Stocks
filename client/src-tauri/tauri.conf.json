@@ -25,7 +25,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png",
+      "icons/icon.svg"
+    ],
     "category": "Finance",
     "shortDescription": "本机优先的中国高股息研究工具",
     "longDescription": "读取本机不可变事实发布包，运行版本化研究策略，不连接券商、不自动交易。",
