@@ -13,6 +13,7 @@ export type Strategy = {
 
 export type Dashboard = {
   release: { release_id: string; available_cutoff: string; facts_sha256: string; coverage: Coverage[] };
+  live_collection: { observed_at: string; historical: LiveBatch; low_frequency: { status: string } };
   strategies: Strategy[];
   latest_runs: Record<string, { screen_run_id: string }>;
 };
@@ -27,6 +28,7 @@ export type RuntimeStatus = {
 };
 
 export type Coverage = { dataset: string; instruments: number; collected: number; average_completeness: number };
+export type LiveBatch = { status: string; run_id: string | null; asset_type: string | null; selected: number; completed: number; progress_ratio: number };
 export type Candidate = { instrument_id: string; research_state: string; reason_codes: string[]; payload: Record<string, unknown> };
 export type StrategyRun = { strategy_run_id: string; strategy: Strategy; release_id: string; screen: { screen_run_id: string; states: Record<string, number> } };
 

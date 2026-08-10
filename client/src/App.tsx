@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { bootstrapRuntime, Candidate, core, Coverage, Dashboard, runtimeStatus, Strategy, StrategyRun } from "./core";
+import { bootstrapRuntime, Candidate, core, Coverage, Dashboard, LiveBatch, runtimeStatus, Strategy, StrategyRun } from "./core";
 
 type Page = "progress" | "home" | "research" | "strategies" | "draft" | "method";
 
@@ -50,7 +50,7 @@ export default function App() {
 
   useEffect(() => { void loadDashboard(); }, []);
   useEffect(() => {
-    const timer = window.setInterval(() => { void loadDashboard(); }, 5 * 60 * 1000);
+    const timer = window.setInterval(() => { void loadDashboard(); }, 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -117,7 +117,14 @@ export default function App() {
 }
 
 function ProgressPage({ dashboard, busy, lastRefreshedAt, onRefresh }: { dashboard: Dashboard | null; busy: boolean; lastRefreshedAt: Date | null; onRefresh: () => void }) {
-  return <section className="page progress-page"><p className="eyebrow">本机数据监视器</p><div className="progress-heading"><div><h1>数据补齐进度</h1><p className="lead">每5分钟读取一次本机最新发布包；只显示已通过发布门禁的数据。</p></div><button className="primary-button refresh-button" onClick={onRefresh} disabled={busy}>{busy ? "刷新中…" : "立即刷新"}</button></div>{dashboard ? <><div className="progress-release"><strong>{dashboard.release.release_id}</strong><span>上次刷新：{lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div><CoverageList coverage={dashboard.release.coverage} /><div className="progress-note">历史价格达到正式回测门槛前，结果会标记为“覆盖受限诊断”；ETF事实仍单独统计。</div></> : <div className="empty-state">{busy ? "正在读取本机发布包…" : "本机发布包尚未可读。"}</div>}</section>;
+  const live = dashboard?.live_collection?.historical;
+  return <section className="page progress-page"><p className="eyebrow">本机数据监视器</p><div className="progress-heading"><div><h1>数据补齐进度</h1><p className="lead">每分钟刷新一次；正式覆盖率只统计已通过发布门禁的数据。</p></div><button className="primary-button refresh-button" onClick={onRefresh} disabled={busy}>{busy ? "刷新中…" : "立即刷新"}</button></div>{dashboard ? <><div className="progress-release"><strong>{dashboard.release.release_id}</strong><span>上次刷新：{lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div>{live && live.status === "running" && <LiveProgress batch={live} />}<CoverageList coverage={dashboard.release.coverage} /><div className="progress-note">历史价格达到正式回测门槛前，结果会标记为“覆盖受限诊断”；ETF事实仍单独统计。</div></> : <div className="empty-state">{busy ? "正在读取本机发布包…" : "本机发布包尚未可读。"}</div>}</section>;
+}
+
+function LiveProgress({ batch }: { batch: LiveBatch }) {
+  const ratio = Math.max(0, Math.min(100, batch.progress_ratio * 100));
+  const label = batch.asset_type === "etf" ? "ETF" : "股票";
+  return <div className="live-progress"><div className="coverage-head"><strong>正在采集：{label}历史价格</strong><span>{batch.completed.toLocaleString()} / {batch.selected.toLocaleString()}</span></div><div className="progress-track"><div className="progress-fill live-fill" style={{ width: `${ratio}%` }} /></div><small>当前批次 {batch.run_id} · {ratio.toFixed(1)}% · 完成后才会切换正式发布版本</small></div>;
 }
 
 function Home({ dashboard, busy, onRefresh, onStrategy, onStrategies }: { dashboard: Dashboard | null; busy: boolean; onRefresh: () => void; onStrategy: (strategy: Strategy) => void; onStrategies: () => void }) {

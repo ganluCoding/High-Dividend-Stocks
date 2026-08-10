@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -24,6 +26,44 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def lock_is_held(path: Path) -> bool:
+    if not path.exists():
+        return False
+    handle = path.open("a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return True
+    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    handle.close()
+    return False
+
+
+def live_batch(runtime_root: Path) -> dict[str, Any]:
+    root = runtime_root / "data" / "raw" / "historical_prices"
+    lock_path = runtime_root / "history-price.lock"
+    if root.is_dir():
+        folders = sorted((item for item in root.iterdir() if item.is_dir()), key=lambda item: item.stat().st_mtime, reverse=True)
+        for folder in folders:
+            run_id = folder.name
+            manifest_path = runtime_root / "data" / "manifests" / f"{run_id}.json"
+            if manifest_path.exists():
+                continue
+            match = re.search(r"_(stock|etf)_(\d+)_(\d+)$", run_id)
+            asset_type = match.group(1) if match else None
+            selected = int(match.group(3)) - int(match.group(2)) if match else 0
+            completed = len(list(folder.glob("*.csv")))
+            active = lock_is_held(lock_path)
+            return {"status": "running" if active else "staged", "run_id": run_id, "asset_type": asset_type, "selected": selected, "completed": completed, "progress_ratio": completed / selected if selected else 0.0}
+    return {"status": "idle", "run_id": None, "asset_type": None, "selected": 0, "completed": 0, "progress_ratio": 0.0}
+
+
+def live_collection(runtime_root: Path) -> dict[str, Any]:
+    low_lock = runtime_root / "data" / "runtime" / "low-frequency-update.lock"
+    return {"observed_at": utc_now(), "historical": live_batch(runtime_root), "low_frequency": {"status": "running" if lock_is_held(low_lock) else "idle"}}
+
+
 def dashboard(runtime_root: Path, workbench: Path) -> dict[str, Any]:
     _, manifest = resolve_release(runtime_root)
     initialize_workbench(workbench)
@@ -37,7 +77,7 @@ def dashboard(runtime_root: Path, workbench: Path) -> dict[str, Any]:
                ) latest ON s.strategy_id=latest.strategy_id AND s.created_at=latest.created_at""", (manifest["release_id"],)
         ):
             latest_runs[row[0]] = {"strategy_version": row[1], "screen_run_id": row[2], "created_at": row[3]}
-    return {"release": {"release_id": manifest["release_id"], "available_cutoff": manifest["available_cutoff"], "facts_sha256": manifest["facts_sha256"], "coverage": coverage}, "strategies": list_strategies(), "latest_runs": latest_runs}
+    return {"release": {"release_id": manifest["release_id"], "available_cutoff": manifest["available_cutoff"], "facts_sha256": manifest["facts_sha256"], "coverage": coverage}, "live_collection": live_collection(runtime_root), "strategies": list_strategies(), "latest_runs": latest_runs}
 
 
 def candidates(workbench: Path, strategy_run_id: str) -> dict[str, Any]:
