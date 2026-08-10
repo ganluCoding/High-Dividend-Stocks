@@ -305,8 +305,12 @@ def main() -> int:
                 failures.append({"source": "akshare_cninfo_convenience", "symbol": code, "dataset": "stock_dividend_events", "message": f"{type(exc).__name__}: {exc}"})
 
         try:
-            financials, financial_symbols, financial_failures = collect_baostock_financials(stocks, year=as_of.year, quarter=1)
-            financial_ok = len(financial_symbols)
+            financials, _financial_symbols, financial_failures = collect_baostock_financials(stocks, year=as_of.year, quarter=1)
+            # A company may legitimately have no extractable current-quarter
+            # metric.  The quality gate therefore measures actual provider
+            # failures, not whether at least one optional field was returned.
+            failed_financial_symbols = {failure["symbol"] for failure in financial_failures}
+            financial_ok = len(stocks) - len(failed_financial_symbols)
             failures.extend(financial_failures)
             financial_raw = pd.DataFrame(financials)
             if not financial_raw.empty:
