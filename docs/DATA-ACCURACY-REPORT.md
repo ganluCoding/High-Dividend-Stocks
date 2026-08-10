@@ -1,17 +1,17 @@
 # 数据准确性与本地抓取验收报告
 
 核验日期：2026-08-10（Asia/Shanghai）  
-核验对象：本机运行时 `/Users/ganlu/Library/Application Support/HighDividend`；原始基线为 `release_20260809_v1`，修复后复验为 `release_20260810_v2`
+核验对象：本机运行时 `/Users/ganlu/Library/Application Support/HighDividend`；原始基线为 `release_20260809_v1`，修复后复验为 `release_20260810_v3`
 
 ## 结论
 
-原始基线不能作为股票股息率的可信输出。经过事件去重、PIT 截止过滤和策略重跑后，当前 `release_20260810_v2` 的逻辑事件计数与收益率已通过复验；低频覆盖边界和自动周频尚未完成，仍不能把结果理解为全市场结论。
+原始基线不能作为股票股息率的可信输出。经过事件去重、PIT 截止过滤、真实低频抓取和策略重跑后，当前 `release_20260810_v3` 的逻辑事件计数与收益率已通过复验；覆盖边界仍然有限，不能把结果理解为全市场结论。
 
 ## 修复后复验（2026-08-10）
 
-- 新发布包：`release_20260810_v2`，facts SHA-256 `7067b59c4890887a3bc87fe5d99c60b62278f3fa2c5b65c18e944aa5ea9a89c9`，SQLite integrity `ok`；
+- 新发布包：`release_20260810_v3`，SQLite integrity `ok`；
 - 股票分红：718 行 / 718 个逻辑事件；ETF 分配：49 行 / 49 个逻辑事件；
-- 重跑三套策略均绑定 `release_20260810_v2`；
+- 重跑三套策略均绑定 `release_20260810_v3`；
 - 美的集团 TTM 已实施税前历史现金收益率：5.15%；长江电力：3.60%；招商银行：5.20%；
 - 新增回归覆盖：跨 run 相同 version 去重，以及披露日晚于 available cutoff 的事实不进入历史筛选；
 - 客户端已按策略通道过滤 `不纳入本模板`，策略运行必须传入固定 `release_id`。
@@ -22,14 +22,14 @@
 
 | 检查 | 结果 |
 | --- | --- |
-| 当前指针 | `release_20260809_v1` |
-| facts SHA-256 | `d2b4ca4f12bfbe97bfd1fad1d708c23d28445ba7f52f730bbb681488fb804411` |
+| 当前指针 | `release_20260810_v3` |
+| facts SHA-256 | `085d6cf96b1b3982fec7244d03135fc7d509966bd8cdc4c34b3bed4c4fccd9a3` |
 | SQLite `PRAGMA integrity_check` | `ok` |
 | 证券主表 | 5,422 只股票 + 1,603 只 ETF = 7,025 |
 | 市场价格 | 7,025/7,025，全部为 2026-08-07，收盘价为正，状态 approved，无重复 instrument/date |
 | 最近市场抓取 | `auto_20260807_222436`，published；40 条跨源抽样重叠，价格不一致 0 条 |
 | 最近低频抓取 | `lowfreq_20260807_222341`，published；股票分红、财务、ETF 分配源覆盖检查均通过 |
-| 回归测试 | 3 个 unittest + 6 个 golden fixtures 通过 |
+| 回归测试 | 4 个 unittest + 6 个 golden fixtures 通过 |
 
 ## 已修复的基线问题：分红事件跨 run 重复
 
@@ -66,13 +66,12 @@
 
 - `com.highdividend.daily-update`：已加载，11 次运行，最近退出码 0；当前 08:35 的 dry-run 按“收盘前”规则跳过，属于预期行为；
 - `com.highdividend.publish-release`：已加载，35 次运行，最近退出码 0；源库未变化时安全跳过发布；
-- `com.highdividend.low-frequency-update`：已加载，但 `runs=0`、尚无 launchd 自动退出记录；已有一次手动成功健康记录 `lowfreq_20260807_222341`。这说明周频任务配置存在，但还不能称为“已自动完成过一次周期运行”。
+- `com.highdividend.low-frequency-update`：已加载，本次真实 `launchctl kickstart` 后 `runs=1`、退出码 0；健康记录为 `lowfreq_20260810_090337`，31/31 股票分红、31/31 财务、5/5 ETF 分配源成功且无失败；
 
-在重复事件问题修复前，本次没有再次触发低频网络抓取，避免向源库继续写入更多无法验收的重复版本。
+本次低频抓取完成后已重新发布 `release_20260810_v3`；发布器随后以退出码 0 运行，策略也已绑定新 release。
 
 ## 尚未完成的放行条件
 
 1. 补充不同 version 的修订/替代链测试，并明确当前有效事件选择规则；
 2. 客户端主路径继续补齐覆盖率和分域日期展示；
-3. 低频 launchd 至少完成一次真实自动运行并记录成功/失败状态；
-4. 完成桌面安装包的 Runtime 自举和策略/规则工件不可变回放。
+3. 完成桌面安装包的 Runtime 自举和策略/规则工件不可变回放。
