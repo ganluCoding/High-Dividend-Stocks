@@ -63,7 +63,7 @@ launchd（本机用户任务，每小时唤醒检查）
 
 `scripts/deploy_runtime.py` 将运行时部署到 `~/Library/Application Support/HighDividend`，避开macOS对“文稿”目录的后台访问限制；`scripts/install_launchd_agent.py --install` 安装每日任务，`scripts/install_low_frequency_agent.py --install` 安装每周低频任务。运行时数据库才是本机服务的正式数据库。除非明确要重置运行时，不要使用 `--refresh-database`，以免用开发种子库覆盖已发布版本。
 
-历史行情另有用户级任务 `com.highdividend.historical-backfill`，每天运行一次，每批最多回填500只股票和100只ETF。股票批次优先选择已出现分红事件但历史日数不足约1,000个交易日的标的；成功率达到80%才发布。手动安装命令为 `scripts/install_historical_backfill_agent.py --install`。该任务与每日收盘行情任务分开，避免长时间历史回填阻塞日行情更新。
+历史行情另有用户级任务 `com.highdividend.historical-backfill`，每天运行一次，每批最多回填500只股票和300只ETF。股票批次优先选择已出现分红事件但历史日数不足约1,000个交易日的标的；ETF历史请求使用最多6路有界并发；成功率达到80%才发布。手动安装命令为 `scripts/install_historical_backfill_agent.py --install`。该任务与每日收盘行情任务分开，避免长时间历史回填阻塞日行情更新。
 
 ## 数据源原则
 

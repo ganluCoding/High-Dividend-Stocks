@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import hashlib
 import json
@@ -217,6 +218,7 @@ def main() -> int:
     parser.add_argument("--dividend-only", action="store_true", help="For stocks, prioritize instruments with an implemented dividend event.")
     parser.add_argument("--minimum-success-ratio", type=float, default=0.80)
     parser.add_argument("--sleep-seconds", type=float, default=0.20)
+    parser.add_argument("--workers", type=int, default=6, help="ETF并发请求数；股票仍保持单会话串行")
     parser.add_argument("--run-id")
     args = parser.parse_args()
 
@@ -224,7 +226,7 @@ def main() -> int:
     database = runtime / "data" / "database" / "high_dividend.db"
     if not database.is_file():
         raise SystemExit(f"Runtime database does not exist: {database}")
-    if args.limit <= 0 or args.offset < 0:
+    if args.limit <= 0 or args.offset < 0 or args.workers <= 0:
         raise SystemExit("--limit must be positive and --offset cannot be negative")
     run_id = args.run_id or f"history_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.asset_type}_{args.offset:05d}_{args.offset + args.limit:05d}"
     source_id = SOURCE_IDS[args.asset_type]
@@ -255,27 +257,48 @@ def main() -> int:
             login = bs_module.login()
             if login.error_code != "0":
                 raise RuntimeError(f"BaoStock login failed: {login.error_msg}")
+        def fetch_one(instrument: dict[str, str]) -> tuple[list[dict[str, Any]], str | None]:
+            try:
+                if args.asset_type == "stock":
+                    rows = collect_baostock_daily(instrument["ticker"], args.start_date, args.end_date, bs_module)
+                else:
+                    rows = collect_sina_etf_daily(instrument["ticker"], args.start_date, args.end_date)
+                return rows, None
+            except Exception as exc:  # noqa: BLE001
+                return [], f"{type(exc).__name__}: {exc}"
+
+        def record_result(index: int, instrument: dict[str, str], rows: list[dict[str, Any]], error: str | None) -> None:
+            print(f"[{index}/{len(selected)}] {instrument['ticker']} {instrument['name']}", flush=True)
+            if error is not None:
+                failures.append({"instrument_id": instrument["instrument_id"], "ticker": instrument["ticker"], "error": error})
+                return
+            try:
+                unique_dates = {row["trade_date"] for row in rows}
+                if len(unique_dates) != len(rows):
+                    raise RuntimeError("duplicate trade dates returned")
+                if not rows:
+                    raise RuntimeError("provider returned no valid rows")
+                raw_path = raw_dir / f"{instrument['instrument_id']}.csv"
+                content_hash = write_raw(raw_path, instrument, rows, observed_at, source_id)
+                raw_files.append({"instrument_id": instrument["instrument_id"], "path": str(raw_path.relative_to(runtime)), "sha256": content_hash, "rows": len(rows)})
+                success.append({"instrument": instrument, "rows": rows, "raw_sha256": content_hash})
+            except Exception as exc:  # noqa: BLE001
+                failures.append({"instrument_id": instrument["instrument_id"], "ticker": instrument["ticker"], "error": f"{type(exc).__name__}: {exc}"})
+
         try:
-            for index, instrument in enumerate(selected, start=1):
-                print(f"[{index}/{len(selected)}] {instrument['ticker']} {instrument['name']}", flush=True)
-                try:
-                    if args.asset_type == "stock":
-                        rows = collect_baostock_daily(instrument["ticker"], args.start_date, args.end_date, bs_module)
-                    else:
-                        rows = collect_sina_etf_daily(instrument["ticker"], args.start_date, args.end_date)
-                    unique_dates = {row["trade_date"] for row in rows}
-                    if len(unique_dates) != len(rows):
-                        raise RuntimeError("duplicate trade dates returned")
-                    if not rows:
-                        raise RuntimeError("provider returned no valid rows")
-                    raw_path = raw_dir / f"{instrument['instrument_id']}.csv"
-                    content_hash = write_raw(raw_path, instrument, rows, observed_at, source_id)
-                    raw_files.append({"instrument_id": instrument["instrument_id"], "path": str(raw_path.relative_to(runtime)), "sha256": content_hash, "rows": len(rows)})
-                    success.append({"instrument": instrument, "rows": rows, "raw_sha256": content_hash})
-                except Exception as exc:  # noqa: BLE001
-                    failures.append({"instrument_id": instrument["instrument_id"], "ticker": instrument["ticker"], "error": f"{type(exc).__name__}: {exc}"})
-                if args.sleep_seconds > 0:
-                    time.sleep(args.sleep_seconds)
+            if args.asset_type == "etf" and args.workers > 1:
+                # ETF requests are independent I/O calls. Keep concurrency bounded
+                # to avoid overwhelming the free endpoint or triggering bans.
+                with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                    for index, (instrument, result) in enumerate(zip(selected, executor.map(fetch_one, selected)), start=1):
+                        record_result(index, instrument, *result)
+                        if args.sleep_seconds > 0:
+                            time.sleep(args.sleep_seconds)
+            else:
+                for index, instrument in enumerate(selected, start=1):
+                    record_result(index, instrument, *fetch_one(instrument))
+                    if args.sleep_seconds > 0:
+                        time.sleep(args.sleep_seconds)
         finally:
             if bs_module is not None:
                 bs_module.logout()

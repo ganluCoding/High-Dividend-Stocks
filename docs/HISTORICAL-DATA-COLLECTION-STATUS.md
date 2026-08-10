@@ -31,7 +31,7 @@
 
 已安装用户级 LaunchAgent：`com.highdividend.historical-backfill`。
 
-它每天低频运行一次，每次最多处理 500 只股票和 100 只 ETF；股票优先从已有分红事件但历史日数不足约 1,000 个交易日的标的中选择，继续填补潜在高股息候选。成功批次会自动发布新版本；失败只保留日志和隔离结果。运行日志：
+它每天低频运行一次，每次最多处理 500 只股票和 300 只 ETF；股票优先从已有分红事件但历史日数不足约 1,000 个交易日的标的中选择，ETF使用最多6路有界并发请求。成功批次会自动发布新版本；失败只保留日志和隔离结果。运行日志：
 
 `~/Library/Application Support/HighDividend/logs/historical-backfill.out.log`
 
