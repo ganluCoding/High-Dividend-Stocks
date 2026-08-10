@@ -49,6 +49,14 @@ python3 scripts/validate_golden_fixtures.py
 
 客户端和策略库说明见 [MVP 文档](docs/STRATEGY-CLIENT-MVP.md)。
 
+启动桌面客户端（macOS）：
+
+```bash
+python3 scripts/launch_desktop_client.py --install
+```
+
+该命令会先检查本机 Runtime、当前事实发布包和桌面内核，再复制到 `~/Applications/高股息研究.app` 并打开。
+
 ## 结果边界
 
 - 股票显示的是过去 12 个月**已实施、税前、常规**现金分红的历史参考；特别分红单列。

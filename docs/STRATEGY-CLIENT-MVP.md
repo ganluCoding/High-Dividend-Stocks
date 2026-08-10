@@ -55,4 +55,12 @@ npm run dev
 npm run tauri -- dev
 ```
 
+安装并启动已构建的桌面客户端：
+
+```bash
+python3 scripts/launch_desktop_client.py --install
+```
+
+启动脚本会先执行 `desktop_preflight.py`，确认当前事实发布包、workbench 和本地研究内核可用。
+
 客户端不会自行抓取网络；数据更新仍由本机发布任务负责。
